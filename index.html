@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#3f6b4f" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Gym Tracker" />
+<link rel="apple-touch-icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" />
+<title>Gym Tracker</title>
+<style>
+  :root{
+    --bg:#e9ecea;
+    --card:#f6f8f7;
+    --green:#3f6b4f;
+    --green-dark:#2f5240;
+    --green-light:#e3ede7;
+    --text:#1f2622;
+    --muted:#6b756f;
+    --border:#cfd6d2;
+    --danger:#b3503f;
+    --radius:14px;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg);color:var(--text);
+    padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+    -webkit-text-size-adjust:100%;
+  }
+  header{
+    background:var(--green);color:#fff;
+    padding:18px 16px;text-align:center;
+    position:sticky;top:0;z-index:10;
+    box-shadow:0 2px 8px rgba(0,0,0,.12);
+  }
+  header h1{margin:0;font-size:20px;font-weight:700;letter-spacing:.3px;}
+  header .sub{font-size:12px;opacity:.85;margin-top:2px;}
+  .wrap{max-width:560px;margin:0 auto;padding:16px;}
+  .card{
+    background:var(--card);border:1px solid var(--border);
+    border-radius:var(--radius);padding:16px;margin-bottom:16px;
+    box-shadow:0 1px 3px rgba(0,0,0,.05);
+  }
+  label{display:block;font-size:13px;font-weight:600;color:var(--muted);margin:0 0 6px;}
+  input,select,textarea{
+    width:100%;font-size:16px;padding:14px;border:1px solid var(--border);
+    border-radius:10px;background:#fff;color:var(--text);font-family:inherit;
+  }
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 3px var(--green-light);}
+  .field{margin-bottom:14px;}
+  .row{display:flex;gap:10px;}
+  .row>div{flex:1;}
+  .set{
+    background:#fff;border:1px solid var(--border);border-radius:12px;
+    padding:12px;margin-bottom:10px;position:relative;
+  }
+  .set .set-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
+  .set .set-head b{font-size:13px;color:var(--green-dark);}
+  .set .del-set{
+    background:none;border:none;color:var(--danger);font-size:13px;
+    font-weight:600;padding:6px 8px;cursor:pointer;
+  }
+  button{font-family:inherit;cursor:pointer;}
+  .btn{
+    width:100%;background:var(--green);color:#fff;border:none;
+    padding:16px;border-radius:12px;font-size:16px;font-weight:700;
+    margin-top:6px;
+  }
+  .btn:active{background:var(--green-dark);}
+  .btn.secondary{background:var(--green-light);color:var(--green-dark);}
+  .btn.add{background:#fff;color:var(--green-dark);border:1.5px dashed var(--green);}
+  .btn.danger{background:var(--danger);}
+  .entry{
+    background:#fff;border:1px solid var(--border);border-radius:12px;
+    padding:12px 14px;margin-bottom:10px;cursor:pointer;
+    display:flex;justify-content:space-between;align-items:center;gap:10px;
+  }
+  .entry:active{background:var(--green-light);}
+  .entry .ex{font-weight:700;font-size:15px;}
+  .entry .meta{font-size:13px;color:var(--muted);margin-top:3px;}
+  .entry .cmt{font-size:12px;color:var(--muted);font-style:italic;margin-top:3px;}
+  .entry .arrow{color:var(--green);font-size:20px;flex-shrink:0;}
+  .section-title{font-size:15px;font-weight:700;color:var(--green-dark);margin:0 0 10px;}
+  .empty{color:var(--muted);font-size:14px;text-align:center;padding:18px;}
+  .status{
+    font-size:13px;text-align:center;padding:10px;border-radius:10px;
+    margin-bottom:12px;display:none;
+  }
+  .status.show{display:block;}
+  .status.ok{background:var(--green-light);color:var(--green-dark);}
+  .status.err{background:#f5d9d3;color:var(--danger);}
+  .status.load{background:#e6e9e7;color:var(--muted);}
+  .modal-bg{
+    position:fixed;inset:0;background:rgba(20,26,23,.55);
+    display:none;align-items:flex-end;z-index:50;
+  }
+  .modal-bg.show{display:flex;}
+  .modal{
+    background:var(--bg);width:100%;max-width:560px;margin:0 auto;
+    border-radius:18px 18px 0 0;padding:18px 16px 26px;
+    max-height:90vh;overflow:auto;
+  }
+  .modal h3{margin:0 0 14px;color:var(--green-dark);font-size:17px;}
+  .config-note{font-size:12px;color:var(--muted);margin-top:8px;line-height:1.4;}
+  datalist{display:none;}
+</style>
+</head>
+<body>
+<header>
+  <h1>Gym Tracker</h1>
+  <div class="sub">Training protokollieren</div>
+</header>
+
+<div class="wrap">
+  <div id="status" class="status"></div>
+
+  <!-- Eingabe -->
+  <div class="card">
+    <div class="field">
+      <label for="date">Datum</label>
+      <input type="date" id="date" />
+    </div>
+    <div class="field">
+      <label for="exercise">Übung</label>
+      <input type="text" id="exercise" list="exerciseList" placeholder="z. B. Bankdrücken" autocomplete="off" />
+      <datalist id="exerciseList"></datalist>
+    </div>
+
+    <label>Sätze</label>
+    <div id="sets"></div>
+    <button class="btn add" id="addSet">+ Satz hinzufügen</button>
+    <button class="btn" id="save" style="margin-top:12px;">Speichern</button>
+  </div>
+
+  <!-- Übersicht -->
+  <div class="card">
+    <div class="section-title" id="overviewTitle">Einträge</div>
+    <div id="entries"><div class="empty">Lade…</div></div>
+  </div>
+</div>
+
+<!-- Bearbeiten Modal -->
+<div class="modal-bg" id="modalBg">
+  <div class="modal">
+    <h3>Eintrag bearbeiten</h3>
+    <div class="field">
+      <label>Übung</label>
+      <input type="text" id="m_exercise" />
+    </div>
+    <div class="row">
+      <div class="field"><label>Satz-Nr.</label><input type="number" id="m_setno" inputmode="numeric" /></div>
+      <div class="field"><label>Reps</label><input type="number" id="m_reps" inputmode="numeric" /></div>
+    </div>
+    <div class="row">
+      <div class="field"><label>Gewicht</label><input type="number" id="m_weight" inputmode="decimal" step="0.5" /></div>
+      <div class="field"><label>Einheit</label>
+        <select id="m_unit"><option value="kg">kg</option><option value="lbs">lbs</option></select>
+      </div>
+    </div>
+    <div class="field"><label>Kommentar</label><input type="text" id="m_comment" /></div>
+    <button class="btn" id="m_save">Änderungen speichern</button>
+    <button class="btn danger" id="m_delete" style="margin-top:10px;">Löschen</button>
+    <button class="btn secondary" id="m_cancel" style="margin-top:10px;">Abbrechen</button>
+  </div>
+</div>
+
+<!-- Config Modal -->
+<div class="modal-bg" id="cfgBg">
+  <div class="modal">
+    <h3>Einrichtung</h3>
+    <div class="field">
+      <label>Apps Script Web-App URL</label>
+      <input type="url" id="cfgUrl" placeholder="https://script.google.com/macros/s/…/exec" />
+    </div>
+    <button class="btn" id="cfgSave">Speichern</button>
+    <div class="config-note">Diese URL erhältst du beim Deployen des Google Apps Scripts (siehe Setup-Anleitung). Sie wird lokal auf deinem Gerät gespeichert. Du kannst dieses Fenster jederzeit per Doppeltipp auf die Kopfzeile wieder öffnen.</div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   KONFIGURATION
+   Trage hier deine Apps-Script-URL ein, oder lass sie leer
+   und gib sie beim ersten Start in der App ein.
+   ============================================================ */
+var SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxAk6sTtkmtgpjukxgmQkmJnZr52nETo8jxsPI27mCdHxN0Am0Yq7iG8wZZpq72QXDHGg/exec"; // <-- HIER deine /exec URL eintragen (optional)
+
+/* ---------- State ---------- */
+var STORE_URL = "gymtracker_url";
+var STORE_EX  = "gymtracker_exercises";
+
+function getUrl(){ return SCRIPT_URL || localStorage.getItem(STORE_URL) || ""; }
+function setUrl(u){ localStorage.setItem(STORE_URL,u); }
+
+/* ---------- Status ---------- */
+function status(msg,type){
+  var el=document.getElementById('status');
+  el.textContent=msg;el.className='status show '+(type||'load');
+  if(type==='ok'){setTimeout(function(){el.className='status';},2500);}
+}
+
+/* ---------- Sätze (Eingabe) ---------- */
+function setTemplate(n,reps,weight,unit,comment){
+  var d=document.createElement('div');
+  d.className='set';
+  d.innerHTML=
+    '<div class="set-head"><b>Satz '+n+'</b><button class="del-set" type="button">Entfernen</button></div>'+
+    '<div class="row">'+
+      '<div class="field" style="margin-bottom:8px;"><label>Reps</label><input type="number" class="s-reps" inputmode="numeric" value="'+(reps||'')+'"></div>'+
+      '<div class="field" style="margin-bottom:8px;"><label>Gewicht</label><input type="number" class="s-weight" inputmode="decimal" step="0.5" value="'+(weight||'')+'"></div>'+
+      '<div class="field" style="margin-bottom:8px;max-width:90px;"><label>Einheit</label><select class="s-unit"><option value="kg">kg</option><option value="lbs">lbs</option></select></div>'+
+    '</div>'+
+    '<div class="field" style="margin-bottom:0;"><label>Kommentar</label><input type="text" class="s-comment" placeholder="optional" value="'+(comment||'').replace(/"/g,'&quot;')+'"></div>';
+  if(unit==='lbs') d.querySelector('.s-unit').value='lbs';
+  d.querySelector('.del-set').onclick=function(){d.remove();renumberSets();};
+  return d;
+}
+function addSet(){
+  var sets=document.getElementById('sets');
+  var n=sets.children.length+1;
+  sets.appendChild(setTemplate(n));
+}
+function renumberSets(){
+  var sets=document.getElementById('sets').children;
+  for(var i=0;i<sets.length;i++){sets[i].querySelector('.set-head b').textContent='Satz '+(i+1);}
+}
+
+/* ---------- Gespeicherte Übungen ---------- */
+function loadExercises(){
+  var arr=[];try{arr=JSON.parse(localStorage.getItem(STORE_EX)||"[]");}catch(e){}
+  var dl=document.getElementById('exerciseList');dl.innerHTML='';
+  arr.forEach(function(x){var o=document.createElement('option');o.value=x;dl.appendChild(o);});
+}
+function rememberExercise(name){
+  if(!name)return;
+  var arr=[];try{arr=JSON.parse(localStorage.getItem(STORE_EX)||"[]");}catch(e){}
+  if(arr.indexOf(name)===-1){arr.push(name);arr.sort();localStorage.setItem(STORE_EX,JSON.stringify(arr));loadExercises();}
+}
+
+/* ---------- Speichern (POST) ---------- */
+function save(){
+  var url=getUrl();
+  if(!url){openCfg();return;}
+  var date=document.getElementById('date').value;
+  var exercise=document.getElementById('exercise').value.trim();
+  if(!date){status('Bitte Datum wählen.','err');return;}
+  if(!exercise){status('Bitte Übung eingeben.','err');return;}
+  var setEls=document.getElementById('sets').children;
+  if(setEls.length===0){status('Bitte mindestens einen Satz hinzufügen.','err');return;}
+  var rows=[];
+  for(var i=0;i<setEls.length;i++){
+    var s=setEls[i];
+    rows.push({
+      date:date,exercise:exercise,setNo:i+1,
+      reps:s.querySelector('.s-reps').value,
+      weight:s.querySelector('.s-weight').value,
+      unit:s.querySelector('.s-unit').value,
+      comment:s.querySelector('.s-comment').value
+    });
+  }
+  status('Speichere…','load');
+  postJSON(url,{action:'create',rows:rows}).then(function(){
+    rememberExercise(exercise);
+    status('Gespeichert ✓','ok');
+    document.getElementById('exercise').value='';
+    document.getElementById('sets').innerHTML='';addSet();
+    loadEntries();
+  }).catch(function(e){status('Fehler beim Speichern: '+e.message,'err');});
+}
+
+/* ---------- Lesen (GET) ---------- */
+function loadEntries(){
+  var url=getUrl();var date=document.getElementById('date').value;
+  var box=document.getElementById('entries');
+  document.getElementById('overviewTitle').textContent='Einträge'+(date?(' – '+date):'');
+  if(!url){box.innerHTML='<div class="empty">Bitte zuerst die Apps-Script-URL einrichten.</div>';return;}
+  if(!date){box.innerHTML='<div class="empty">Datum wählen.</div>';return;}
+  box.innerHTML='<div class="empty">Lade…</div>';
+  fetch(url+'?action=read&date='+encodeURIComponent(date))
+    .then(function(r){return r.json();})
+    .then(function(data){renderEntries(data.rows||[]);})
+    .catch(function(e){box.innerHTML='<div class="empty">Fehler beim Laden: '+e.message+'</div>';});
+}
+function renderEntries(rows){
+  var box=document.getElementById('entries');
+  if(!rows.length){box.innerHTML='<div class="empty">Keine Einträge für dieses Datum.</div>';return;}
+  rows.sort(function(a,b){
+    if(a.exercise===b.exercise)return (a.setNo||0)-(b.setNo||0);
+    return a.exercise<b.exercise?-1:1;
+  });
+  box.innerHTML='';
+  rows.forEach(function(r){
+    if(r.exercise) rememberExercise(r.exercise);
+    var d=document.createElement('div');d.className='entry';
+    var cmt=r.comment?'<div class="cmt">“'+escapeHtml(r.comment)+'”</div>':'';
+    d.innerHTML=
+      '<div><div class="ex">'+escapeHtml(r.exercise)+' · Satz '+r.setNo+'</div>'+
+      '<div class="meta">'+escapeHtml(r.reps)+' Reps × '+escapeHtml(r.weight)+' '+escapeHtml(r.unit)+'</div>'+cmt+'</div>'+
+      '<div class="arrow">›</div>';
+    d.onclick=function(){openEdit(r);};
+    box.appendChild(d);
+  });
+}
+
+/* ---------- Bearbeiten ---------- */
+var editing=null;
+function openEdit(r){
+  editing=r;
+  document.getElementById('m_exercise').value=r.exercise;
+  document.getElementById('m_setno').value=r.setNo;
+  document.getElementById('m_reps').value=r.reps;
+  document.getElementById('m_weight').value=r.weight;
+  document.getElementById('m_unit').value=r.unit==='lbs'?'lbs':'kg';
+  document.getElementById('m_comment').value=r.comment||'';
+  document.getElementById('modalBg').classList.add('show');
+}
+function closeEdit(){document.getElementById('modalBg').classList.remove('show');editing=null;}
+function saveEdit(){
+  var url=getUrl();if(!editing)return;
+  var payload={action:'update',row:{
+    id:editing.id,
+    date:editing.date,
+    exercise:document.getElementById('m_exercise').value.trim(),
+    setNo:document.getElementById('m_setno').value,
+    reps:document.getElementById('m_reps').value,
+    weight:document.getElementById('m_weight').value,
+    unit:document.getElementById('m_unit').value,
+    comment:document.getElementById('m_comment').value
+  }};
+  status('Speichere…','load');closeEdit();
+  postJSON(url,payload).then(function(){status('Aktualisiert ✓','ok');loadEntries();})
+    .catch(function(e){status('Fehler: '+e.message,'err');});
+}
+function deleteEdit(){
+  var url=getUrl();if(!editing)return;
+  if(!confirm('Diesen Eintrag löschen?'))return;
+  status('Lösche…','load');var id=editing.id;closeEdit();
+  postJSON(url,{action:'delete',row:{id:id}}).then(function(){status('Gelöscht ✓','ok');loadEntries();})
+    .catch(function(e){status('Fehler: '+e.message,'err');});
+}
+
+/* ---------- HTTP ---------- */
+function postJSON(url,obj){
+  // text/plain vermeidet CORS-Preflight gegenüber Apps Script
+  return fetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(obj)})
+    .then(function(r){return r.json();})
+    .then(function(d){if(d&&d.error){throw new Error(d.error);}return d;});
+}
+function escapeHtml(s){return (s==null?'':String(s)).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+
+/* ---------- Config Modal ---------- */
+function openCfg(){document.getElementById('cfgUrl').value=getUrl();document.getElementById('cfgBg').classList.add('show');}
+function closeCfg(){document.getElementById('cfgBg').classList.remove('show');}
+
+/* ---------- Init ---------- */
+function todayStr(){var d=new Date();var off=d.getTimezoneOffset();d=new Date(d.getTime()-off*60000);return d.toISOString().slice(0,10);}
+document.addEventListener('DOMContentLoaded',function(){
+  document.getElementById('date').value=todayStr();
+  addSet();
+  loadExercises();
+  document.getElementById('addSet').onclick=addSet;
+  document.getElementById('save').onclick=save;
+  document.getElementById('date').onchange=loadEntries;
+  document.getElementById('m_save').onclick=saveEdit;
+  document.getElementById('m_delete').onclick=deleteEdit;
+  document.getElementById('m_cancel').onclick=closeEdit;
+  document.getElementById('modalBg').onclick=function(e){if(e.target.id==='modalBg')closeEdit();};
+  document.getElementById('cfgSave').onclick=function(){
+    var u=document.getElementById('cfgUrl').value.trim();
+    if(u){setUrl(u);closeCfg();loadEntries();status('URL gespeichert ✓','ok');}
+  };
+  document.getElementById('cfgBg').onclick=function(e){if(e.target.id==='cfgBg')closeCfg();};
+  // Doppeltipp/Doppelklick auf Kopfzeile öffnet Einrichtung
+  document.querySelector('header').addEventListener('dblclick',openCfg);
+  if(!getUrl()){openCfg();}else{loadEntries();}
+});
+
+/* ============================================================
+   PWA: Manifest (inline) + Service Worker (inline via Blob)
+   ============================================================ */
+(function(){
+  var icon="data:image/svg+xml,"+encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512"><rect width="512" height="512" rx="96" fill="#3f6b4f"/><g fill="#e9ecea"><rect x="86" y="226" width="40" height="60" rx="8"/><rect x="386" y="226" width="40" height="60" rx="8"/><rect x="126" y="196" width="44" height="120" rx="10"/><rect x="342" y="196" width="44" height="120" rx="10"/><rect x="170" y="240" width="172" height="32" rx="10"/></g></svg>');
+  var manifest={
+    name:"Gym Tracker",short_name:"Gym",start_url:".",scope:".",
+    display:"standalone",background_color:"#e9ecea",theme_color:"#3f6b4f",
+    icons:[{src:icon,sizes:"512x512",type:"image/svg+xml",purpose:"any maskable"}]
+  };
+  var mlink=document.createElement('link');mlink.rel='manifest';
+  mlink.href=URL.createObjectURL(new Blob([JSON.stringify(manifest)],{type:'application/manifest+json'}));
+  document.head.appendChild(mlink);
+
+  if('serviceWorker' in navigator){
+    var sw="self.addEventListener('install',function(e){self.skipWaiting();});"+
+           "self.addEventListener('activate',function(e){e.waitUntil(self.clients.claim());});"+
+           "self.addEventListener('fetch',function(e){"+
+           " e.respondWith(fetch(e.request).catch(function(){return caches.match(e.request);}));"+
+           "});";
+    try{
+      var swUrl=URL.createObjectURL(new Blob([sw],{type:'text/javascript'}));
+      navigator.serviceWorker.register(swUrl).catch(function(){});
+    }catch(e){}
+  }
+})();
+</script>
+</body>
+</html>
