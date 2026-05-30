@@ -27,7 +27,7 @@
   body{
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
     background:var(--bg);color:var(--text);
-    padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+    padding:env(safe-area-inset-top) 0 calc(72px + env(safe-area-inset-bottom));
     -webkit-text-size-adjust:100%;
   }
   header{
@@ -106,6 +106,46 @@
   .modal h3{margin:0 0 14px;color:var(--green-dark);font-size:17px;}
   .config-note{font-size:12px;color:var(--muted);margin-top:8px;line-height:1.4;}
   datalist{display:none;}
+
+  /* Tabs */
+  .tab{display:none;}
+  .tab.active{display:block;}
+  .tabbar{
+    position:fixed;left:0;right:0;bottom:0;z-index:40;
+    display:flex;background:#fff;border-top:1px solid var(--border);
+    padding-bottom:env(safe-area-inset-bottom);
+  }
+  .tabbar button{
+    flex:1;background:none;border:none;padding:12px 0 10px;
+    font-size:12px;font-weight:600;color:var(--muted);
+    display:flex;flex-direction:column;align-items:center;gap:3px;
+  }
+  .tabbar button.active{color:var(--green-dark);}
+  .tabbar .ic{font-size:20px;line-height:1;}
+
+  /* Kalender */
+  .cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+  .cal-head button{
+    background:var(--green-light);color:var(--green-dark);border:none;
+    width:44px;height:44px;border-radius:12px;font-size:20px;font-weight:700;
+  }
+  .cal-head .mlabel{font-size:16px;font-weight:700;color:var(--green-dark);}
+  .stats{display:flex;gap:10px;margin-bottom:16px;}
+  .stat{flex:1;background:var(--green);color:#fff;border-radius:14px;padding:14px;text-align:center;}
+  .stat .num{font-size:26px;font-weight:800;line-height:1;}
+  .stat .lab{font-size:11px;opacity:.9;margin-top:6px;}
+  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;}
+  .cal-grid .dow{text-align:center;font-size:11px;font-weight:700;color:var(--muted);padding-bottom:2px;}
+  .cal-cell{
+    aspect-ratio:1/1;display:flex;align-items:center;justify-content:center;
+    border-radius:10px;font-size:14px;color:var(--text);position:relative;
+    background:#fff;border:1px solid var(--border);
+  }
+  .cal-cell.empty{background:transparent;border:none;}
+  .cal-cell.today{outline:2px solid var(--green);}
+  .cal-cell.has{background:var(--green);color:#fff;font-weight:700;cursor:pointer;}
+  .cal-cell .dot{position:absolute;bottom:5px;font-size:9px;opacity:.9;}
+  .cal-legend{font-size:12px;color:var(--muted);margin-top:12px;text-align:center;}
 </style>
 </head>
 <body>
@@ -114,10 +154,11 @@
   <div class="sub">Training protokollieren</div>
 </header>
 
+<!-- ===== TAB: ERFASSEN ===== -->
+<div class="tab active" id="tab-log">
 <div class="wrap">
   <div id="status" class="status"></div>
 
-  <!-- Eingabe -->
   <div class="card">
     <div class="field">
       <label for="date">Datum</label>
@@ -135,11 +176,30 @@
     <button class="btn" id="save" style="margin-top:12px;">Speichern</button>
   </div>
 
-  <!-- Übersicht -->
   <div class="card">
     <div class="section-title" id="overviewTitle">Einträge</div>
     <div id="entries"><div class="empty">Lade…</div></div>
   </div>
+</div>
+</div>
+
+<!-- ===== TAB: KALENDER ===== -->
+<div class="tab" id="tab-cal">
+<div class="wrap">
+  <div class="card">
+    <div class="cal-head">
+      <button id="calPrev">‹</button>
+      <div class="mlabel" id="calLabel">—</div>
+      <button id="calNext">›</button>
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="num" id="statTrainings">0</div><div class="lab">Trainings diesen Monat</div></div>
+      <div class="stat"><div class="num" id="statSets">0</div><div class="lab">Sätze diesen Monat</div></div>
+    </div>
+    <div class="cal-grid" id="calGrid"></div>
+    <div class="cal-legend">Grün = Trainingstag · antippen öffnet den Tag</div>
+  </div>
+</div>
 </div>
 
 <!-- Bearbeiten Modal -->
@@ -148,7 +208,7 @@
     <h3>Eintrag bearbeiten</h3>
     <div class="field">
       <label>Übung</label>
-      <input type="text" id="m_exercise" />
+      <input type="text" id="m_exercise" list="exerciseList" />
     </div>
     <div class="row">
       <div class="field"><label>Satz-Nr.</label><input type="number" id="m_setno" inputmode="numeric" /></div>
@@ -159,6 +219,9 @@
       <div class="field"><label>Einheit</label>
         <select id="m_unit"><option value="kg">kg</option><option value="lbs">lbs</option></select>
       </div>
+    </div>
+    <div class="field"><label>Gerät</label>
+      <select id="m_equipment"></select>
     </div>
     <div class="field"><label>Kommentar</label><input type="text" id="m_comment" /></div>
     <button class="btn" id="m_save">Änderungen speichern</button>
@@ -180,6 +243,12 @@
   </div>
 </div>
 
+<!-- Tab-Leiste -->
+<nav class="tabbar">
+  <button id="navLog" class="active"><span class="ic">📝</span>Erfassen</button>
+  <button id="navCal"><span class="ic">📅</span>Kalender</button>
+</nav>
+
 <script>
 /* ============================================================
    KONFIGURATION
@@ -188,9 +257,12 @@
    ============================================================ */
 var SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxAk6sTtkmtgpjukxgmQkmJnZr52nETo8jxsPI27mCdHxN0Am0Yq7iG8wZZpq72QXDHGg/exec"; // <-- HIER deine /exec URL eintragen (optional)
 
+var EQUIPMENT = ["", "Machine","Resistance Band","Loop Band","Body Weight","Kettlebell","TRX","Dumbbell","Barbell"];
+
 /* ---------- State ---------- */
 var STORE_URL = "gymtracker_url";
 var STORE_EX  = "gymtracker_exercises";
+var calYear, calMonth; // calMonth 0-basiert
 
 function getUrl(){ return SCRIPT_URL || localStorage.getItem(STORE_URL) || ""; }
 function setUrl(u){ localStorage.setItem(STORE_URL,u); }
@@ -202,8 +274,16 @@ function status(msg,type){
   if(type==='ok'){setTimeout(function(){el.className='status';},2500);}
 }
 
+/* ---------- Equipment-Dropdown ---------- */
+function equipmentOptions(selected){
+  return EQUIPMENT.map(function(v){
+    var lab=v===""?"– Gerät –":v;
+    return '<option value="'+v+'"'+(v===selected?' selected':'')+'>'+lab+'</option>';
+  }).join('');
+}
+
 /* ---------- Sätze (Eingabe) ---------- */
-function setTemplate(n,reps,weight,unit,comment){
+function setTemplate(n,reps,weight,unit,equipment,comment){
   var d=document.createElement('div');
   d.className='set';
   d.innerHTML=
@@ -213,6 +293,7 @@ function setTemplate(n,reps,weight,unit,comment){
       '<div class="field" style="margin-bottom:8px;"><label>Gewicht</label><input type="number" class="s-weight" inputmode="decimal" step="0.5" value="'+(weight||'')+'"></div>'+
       '<div class="field" style="margin-bottom:8px;max-width:90px;"><label>Einheit</label><select class="s-unit"><option value="kg">kg</option><option value="lbs">lbs</option></select></div>'+
     '</div>'+
+    '<div class="field" style="margin-bottom:8px;"><label>Gerät</label><select class="s-equipment">'+equipmentOptions(equipment||"")+'</select></div>'+
     '<div class="field" style="margin-bottom:0;"><label>Kommentar</label><input type="text" class="s-comment" placeholder="optional" value="'+(comment||'').replace(/"/g,'&quot;')+'"></div>';
   if(unit==='lbs') d.querySelector('.s-unit').value='lbs';
   d.querySelector('.del-set').onclick=function(){d.remove();renumberSets();};
@@ -228,16 +309,31 @@ function renumberSets(){
   for(var i=0;i<sets.length;i++){sets[i].querySelector('.set-head b').textContent='Satz '+(i+1);}
 }
 
-/* ---------- Gespeicherte Übungen ---------- */
-function loadExercises(){
-  var arr=[];try{arr=JSON.parse(localStorage.getItem(STORE_EX)||"[]");}catch(e){}
+/* ---------- Gespeicherte Übungen / Autocomplete ---------- */
+function readLocalEx(){var a=[];try{a=JSON.parse(localStorage.getItem(STORE_EX)||"[]");}catch(e){}return a;}
+function writeLocalEx(a){localStorage.setItem(STORE_EX,JSON.stringify(a));}
+function renderExDatalist(){
+  var arr=readLocalEx();
   var dl=document.getElementById('exerciseList');dl.innerHTML='';
   arr.forEach(function(x){var o=document.createElement('option');o.value=x;dl.appendChild(o);});
 }
 function rememberExercise(name){
   if(!name)return;
-  var arr=[];try{arr=JSON.parse(localStorage.getItem(STORE_EX)||"[]");}catch(e){}
-  if(arr.indexOf(name)===-1){arr.push(name);arr.sort();localStorage.setItem(STORE_EX,JSON.stringify(arr));loadExercises();}
+  var arr=readLocalEx();
+  if(arr.indexOf(name)===-1){arr.push(name);arr.sort();writeLocalEx(arr);renderExDatalist();}
+}
+// Vollständige Übungsliste vom Sheet laden (geräteübergreifend)
+function fetchExercises(){
+  var url=getUrl();if(!url)return;
+  fetch(url+'?action=exercises')
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(d&&d.exercises){
+        var merged=readLocalEx();
+        d.exercises.forEach(function(n){if(n&&merged.indexOf(n)===-1)merged.push(n);});
+        merged.sort();writeLocalEx(merged);renderExDatalist();
+      }
+    }).catch(function(){});
 }
 
 /* ---------- Speichern (POST) ---------- */
@@ -258,6 +354,7 @@ function save(){
       reps:s.querySelector('.s-reps').value,
       weight:s.querySelector('.s-weight').value,
       unit:s.querySelector('.s-unit').value,
+      equipment:s.querySelector('.s-equipment').value,
       comment:s.querySelector('.s-comment').value
     });
   }
@@ -295,10 +392,11 @@ function renderEntries(rows){
   rows.forEach(function(r){
     if(r.exercise) rememberExercise(r.exercise);
     var d=document.createElement('div');d.className='entry';
+    var equip=r.equipment?' · '+escapeHtml(r.equipment):'';
     var cmt=r.comment?'<div class="cmt">“'+escapeHtml(r.comment)+'”</div>':'';
     d.innerHTML=
       '<div><div class="ex">'+escapeHtml(r.exercise)+' · Satz '+r.setNo+'</div>'+
-      '<div class="meta">'+escapeHtml(r.reps)+' Reps × '+escapeHtml(r.weight)+' '+escapeHtml(r.unit)+'</div>'+cmt+'</div>'+
+      '<div class="meta">'+escapeHtml(r.reps)+' Reps × '+escapeHtml(r.weight)+' '+escapeHtml(r.unit)+equip+'</div>'+cmt+'</div>'+
       '<div class="arrow">›</div>';
     d.onclick=function(){openEdit(r);};
     box.appendChild(d);
@@ -314,6 +412,7 @@ function openEdit(r){
   document.getElementById('m_reps').value=r.reps;
   document.getElementById('m_weight').value=r.weight;
   document.getElementById('m_unit').value=r.unit==='lbs'?'lbs':'kg';
+  document.getElementById('m_equipment').innerHTML=equipmentOptions(r.equipment||"");
   document.getElementById('m_comment').value=r.comment||'';
   document.getElementById('modalBg').classList.add('show');
 }
@@ -328,6 +427,7 @@ function saveEdit(){
     reps:document.getElementById('m_reps').value,
     weight:document.getElementById('m_weight').value,
     unit:document.getElementById('m_unit').value,
+    equipment:document.getElementById('m_equipment').value,
     comment:document.getElementById('m_comment').value
   }};
   status('Speichere…','load');closeEdit();
@@ -342,9 +442,73 @@ function deleteEdit(){
     .catch(function(e){status('Fehler: '+e.message,'err');});
 }
 
+/* ---------- Kalender ---------- */
+var MONTHS=['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+function pad2(n){return (n<10?'0':'')+n;}
+function loadCalendar(){
+  var url=getUrl();
+  var label=document.getElementById('calLabel');
+  label.textContent=MONTHS[calMonth]+' '+calYear;
+  var monthStr=calYear+'-'+pad2(calMonth+1);
+  if(!url){renderCalendar({});return;}
+  fetch(url+'?action=month&month='+monthStr)
+    .then(function(r){return r.json();})
+    .then(function(d){
+      var rows=d.rows||[];
+      var byDay={}; // 'YYYY-MM-DD' -> Satzanzahl
+      rows.forEach(function(r){if(!r.date)return;byDay[r.date]=(byDay[r.date]||0)+1;});
+      document.getElementById('statTrainings').textContent=Object.keys(byDay).length;
+      document.getElementById('statSets').textContent=rows.length;
+      renderCalendar(byDay);
+    }).catch(function(){renderCalendar({});});
+}
+function renderCalendar(byDay){
+  var grid=document.getElementById('calGrid');grid.innerHTML='';
+  ['Mo','Di','Mi','Do','Fr','Sa','So'].forEach(function(d){
+    var el=document.createElement('div');el.className='dow';el.textContent=d;grid.appendChild(el);
+  });
+  var first=new Date(calYear,calMonth,1);
+  var startDow=(first.getDay()+6)%7; // Montag=0
+  var daysInMonth=new Date(calYear,calMonth+1,0).getDate();
+  for(var i=0;i<startDow;i++){var e=document.createElement('div');e.className='cal-cell empty';grid.appendChild(e);}
+  var today=todayStr();
+  for(var day=1;day<=daysInMonth;day++){
+    var ds=calYear+'-'+pad2(calMonth+1)+'-'+pad2(day);
+    var cell=document.createElement('div');cell.className='cal-cell';
+    cell.textContent=day;
+    if(ds===today)cell.classList.add('today');
+    if(byDay[ds]){
+      cell.classList.add('has');
+      var dot=document.createElement('span');dot.className='dot';dot.textContent=byDay[ds];cell.appendChild(dot);
+      (function(dstr){cell.onclick=function(){openDate(dstr);};})(ds);
+    }
+    grid.appendChild(cell);
+  }
+}
+function shiftMonth(delta){
+  calMonth+=delta;
+  if(calMonth<0){calMonth=11;calYear--;}
+  if(calMonth>11){calMonth=0;calYear++;}
+  loadCalendar();
+}
+function openDate(ds){
+  document.getElementById('date').value=ds;
+  loadEntries();
+  switchTab('log');
+}
+
+/* ---------- Tabs ---------- */
+function switchTab(which){
+  var log=which==='log';
+  document.getElementById('tab-log').classList.toggle('active',log);
+  document.getElementById('tab-cal').classList.toggle('active',!log);
+  document.getElementById('navLog').classList.toggle('active',log);
+  document.getElementById('navCal').classList.toggle('active',!log);
+  if(!log)loadCalendar();
+}
+
 /* ---------- HTTP ---------- */
 function postJSON(url,obj){
-  // text/plain vermeidet CORS-Preflight gegenüber Apps Script
   return fetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(obj)})
     .then(function(r){return r.json();})
     .then(function(d){if(d&&d.error){throw new Error(d.error);}return d;});
@@ -359,8 +523,9 @@ function closeCfg(){document.getElementById('cfgBg').classList.remove('show');}
 function todayStr(){var d=new Date();var off=d.getTimezoneOffset();d=new Date(d.getTime()-off*60000);return d.toISOString().slice(0,10);}
 document.addEventListener('DOMContentLoaded',function(){
   document.getElementById('date').value=todayStr();
+  var now=new Date();calYear=now.getFullYear();calMonth=now.getMonth();
   addSet();
-  loadExercises();
+  renderExDatalist();
   document.getElementById('addSet').onclick=addSet;
   document.getElementById('save').onclick=save;
   document.getElementById('date').onchange=loadEntries;
@@ -370,12 +535,15 @@ document.addEventListener('DOMContentLoaded',function(){
   document.getElementById('modalBg').onclick=function(e){if(e.target.id==='modalBg')closeEdit();};
   document.getElementById('cfgSave').onclick=function(){
     var u=document.getElementById('cfgUrl').value.trim();
-    if(u){setUrl(u);closeCfg();loadEntries();status('URL gespeichert ✓','ok');}
+    if(u){setUrl(u);closeCfg();loadEntries();fetchExercises();status('URL gespeichert ✓','ok');}
   };
   document.getElementById('cfgBg').onclick=function(e){if(e.target.id==='cfgBg')closeCfg();};
-  // Doppeltipp/Doppelklick auf Kopfzeile öffnet Einrichtung
   document.querySelector('header').addEventListener('dblclick',openCfg);
-  if(!getUrl()){openCfg();}else{loadEntries();}
+  document.getElementById('navLog').onclick=function(){switchTab('log');};
+  document.getElementById('navCal').onclick=function(){switchTab('cal');};
+  document.getElementById('calPrev').onclick=function(){shiftMonth(-1);};
+  document.getElementById('calNext').onclick=function(){shiftMonth(1);};
+  if(!getUrl()){openCfg();}else{loadEntries();fetchExercises();}
 });
 
 /* ============================================================
