@@ -50,6 +50,8 @@
     border-radius:10px;background:#fff;color:var(--text);font-family:inherit;
   }
   input:focus,select:focus,textarea:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 3px var(--green-light);}
+  input[type="date"]{-webkit-appearance:none;appearance:none;min-width:0;max-width:100%;}
+  input[type="date"]::-webkit-date-and-time-value{text-align:left;}
   .field{margin-bottom:14px;}
   .row{display:flex;gap:10px;}
   .row>div{flex:1;}
@@ -302,7 +304,18 @@ function setTemplate(n,reps,weight,unit,equipment,comment){
 function addSet(){
   var sets=document.getElementById('sets');
   var n=sets.children.length+1;
-  sets.appendChild(setTemplate(n));
+  var prev=sets.children[sets.children.length-1];
+  if(prev){
+    // Werte vom vorherigen Satz übernehmen
+    sets.appendChild(setTemplate(n,
+      prev.querySelector('.s-reps').value,
+      prev.querySelector('.s-weight').value,
+      prev.querySelector('.s-unit').value,
+      prev.querySelector('.s-equipment').value,
+      prev.querySelector('.s-comment').value));
+  }else{
+    sets.appendChild(setTemplate(n));
+  }
 }
 function renumberSets(){
   var sets=document.getElementById('sets').children;
@@ -346,11 +359,10 @@ function save(){
   if(!exercise){status('Bitte Übung eingeben.','err');return;}
   var setEls=document.getElementById('sets').children;
   if(setEls.length===0){status('Bitte mindestens einen Satz hinzufügen.','err');return;}
-  var rows=[];
+  var inputs=[];
   for(var i=0;i<setEls.length;i++){
     var s=setEls[i];
-    rows.push({
-      date:date,exercise:exercise,setNo:i+1,
+    inputs.push({
       reps:s.querySelector('.s-reps').value,
       weight:s.querySelector('.s-weight').value,
       unit:s.querySelector('.s-unit').value,
@@ -359,13 +371,29 @@ function save(){
     });
   }
   status('Speichere…','load');
-  postJSON(url,{action:'create',rows:rows}).then(function(){
-    rememberExercise(exercise);
-    status('Gespeichert ✓','ok');
-    document.getElementById('exercise').value='';
-    document.getElementById('sets').innerHTML='';addSet();
-    loadEntries();
-  }).catch(function(e){status('Fehler beim Speichern: '+e.message,'err');});
+  // Prüfen, ob diese Übung am Tag schon existiert -> Satznummerierung fortsetzen
+  fetch(url+'?action=read&date='+encodeURIComponent(date))
+    .then(function(r){return r.json();})
+    .then(function(d){
+      var max=0;
+      (d.rows||[]).forEach(function(o){
+        if((o.exercise||'').toString().trim().toLowerCase()===exercise.toLowerCase()){
+          var nn=parseInt(o.setNo,10);if(!isNaN(nn)&&nn>max)max=nn;
+        }
+      });
+      var rows=inputs.map(function(s,i){
+        return {date:date,exercise:exercise,setNo:max+i+1,
+          reps:s.reps,weight:s.weight,unit:s.unit,equipment:s.equipment,comment:s.comment};
+      });
+      return postJSON(url,{action:'create',rows:rows});
+    })
+    .then(function(){
+      rememberExercise(exercise);
+      status('Gespeichert ✓','ok');
+      document.getElementById('exercise').value='';
+      document.getElementById('sets').innerHTML='';addSet();
+      loadEntries();
+    }).catch(function(e){status('Fehler beim Speichern: '+e.message,'err');});
 }
 
 /* ---------- Lesen (GET) ---------- */
