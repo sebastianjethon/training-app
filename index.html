@@ -9,6 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Gym Tracker" />
 <link rel="apple-touch-icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" />
 <title>Gym Tracker</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
   :root{
     --bg:#e9ecea;
@@ -148,6 +149,9 @@
   .cal-cell.has{background:var(--green);color:#fff;font-weight:700;cursor:pointer;}
   .cal-cell .dot{position:absolute;bottom:5px;font-size:9px;opacity:.9;}
   .cal-legend{font-size:12px;color:var(--muted);margin-top:12px;text-align:center;}
+
+  /* Analyse */
+  .chart-wrap{position:relative;height:240px;margin-top:6px;}
 </style>
 </head>
 <body>
@@ -204,6 +208,29 @@
 </div>
 </div>
 
+<!-- ===== TAB: ANALYSE ===== -->
+<div class="tab" id="tab-ana">
+<div class="wrap">
+  <div id="anaStatus" class="empty">Lade…</div>
+  <div class="card" id="anaWeightCard" style="display:none;">
+    <div class="section-title">Gewichtsänderung je Übung</div>
+    <div class="field" style="margin-bottom:6px;">
+      <label for="anaExercise">Übung</label>
+      <select id="anaExercise"></select>
+    </div>
+    <div class="chart-wrap"><canvas id="chartWeight"></canvas></div>
+  </div>
+  <div class="card" id="anaFreqCard" style="display:none;">
+    <div class="section-title">Trainingshäufigkeit je Woche</div>
+    <div class="chart-wrap"><canvas id="chartFreq"></canvas></div>
+  </div>
+  <div class="card" id="anaSetsCard" style="display:none;">
+    <div class="section-title">Sätze je Woche</div>
+    <div class="chart-wrap"><canvas id="chartSets"></canvas></div>
+  </div>
+</div>
+</div>
+
 <!-- Bearbeiten Modal -->
 <div class="modal-bg" id="modalBg">
   <div class="modal">
@@ -249,6 +276,7 @@
 <nav class="tabbar">
   <button id="navLog" class="active"><span class="ic">📝</span>Erfassen</button>
   <button id="navCal"><span class="ic">📅</span>Kalender</button>
+  <button id="navAna"><span class="ic">📊</span>Analyse</button>
 </nav>
 
 <script>
@@ -527,12 +555,101 @@ function openDate(ds){
 
 /* ---------- Tabs ---------- */
 function switchTab(which){
-  var log=which==='log';
-  document.getElementById('tab-log').classList.toggle('active',log);
-  document.getElementById('tab-cal').classList.toggle('active',!log);
-  document.getElementById('navLog').classList.toggle('active',log);
-  document.getElementById('navCal').classList.toggle('active',!log);
-  if(!log)loadCalendar();
+  document.getElementById('tab-log').classList.toggle('active',which==='log');
+  document.getElementById('tab-cal').classList.toggle('active',which==='cal');
+  document.getElementById('tab-ana').classList.toggle('active',which==='ana');
+  document.getElementById('navLog').classList.toggle('active',which==='log');
+  document.getElementById('navCal').classList.toggle('active',which==='cal');
+  document.getElementById('navAna').classList.toggle('active',which==='ana');
+  if(which==='cal')loadCalendar();
+  if(which==='ana')loadAnalysis();
+}
+
+/* ---------- Analyse ---------- */
+var charts={};
+function isoWeekKey(dateStr){
+  // ISO-8601 Wochenschluessel "YYYY-Www"
+  var p=dateStr.split('-');var d=new Date(Date.UTC(+p[0],+p[1]-1,+p[2]));
+  var day=(d.getUTCDay()+6)%7; // Mo=0
+  d.setUTCDate(d.getUTCDate()-day+3); // Donnerstag dieser Woche
+  var firstThu=new Date(Date.UTC(d.getUTCFullYear(),0,4));
+  var week=1+Math.round(((d-firstThu)/86400000-3+((firstThu.getUTCDay()+6)%7))/7);
+  return d.getUTCFullYear()+'-W'+(week<10?'0':'')+week;
+}
+function loadAnalysis(){
+  var url=getUrl();
+  var st=document.getElementById('anaStatus');
+  if(!url){st.textContent='Bitte zuerst die Apps-Script-URL einrichten.';return;}
+  st.style.display='block';st.textContent='Lade…';
+  fetch(url+'?action=read')
+    .then(function(r){return r.json();})
+    .then(function(d){renderAnalysis(d.rows||[]);})
+    .catch(function(e){st.textContent='Fehler beim Laden: '+e.message;});
+}
+function renderAnalysis(rows){
+  var st=document.getElementById('anaStatus');
+  if(!rows.length){st.textContent='Noch keine Daten für Analysen vorhanden.';
+    ['anaWeightCard','anaFreqCard','anaSetsCard'].forEach(function(id){document.getElementById(id).style.display='none';});
+    return;}
+  st.style.display='none';
+  ['anaWeightCard','anaFreqCard','anaSetsCard'].forEach(function(id){document.getElementById(id).style.display='block';});
+
+  // ---- Gewicht je Übung ----
+  var exNames=[];var seen={};
+  rows.forEach(function(r){var n=(r.exercise||'').toString().trim();if(n&&!seen[n.toLowerCase()]){seen[n.toLowerCase()]=true;exNames.push(n);}});
+  exNames.sort();
+  var sel=document.getElementById('anaExercise');
+  var prev=sel.value;
+  sel.innerHTML=exNames.map(function(n){return '<option value="'+escapeHtml(n)+'">'+escapeHtml(n)+'</option>';}).join('');
+  if(prev&&exNames.indexOf(prev)!==-1)sel.value=prev;
+  sel.onchange=function(){drawWeightChart(rows,sel.value);};
+  drawWeightChart(rows,sel.value);
+
+  // ---- pro Woche: Trainingstage & Sätze ----
+  var weekSets={},weekDays={};
+  rows.forEach(function(r){
+    if(!r.date)return;var wk=isoWeekKey(r.date);
+    weekSets[wk]=(weekSets[wk]||0)+1;
+    (weekDays[wk]=weekDays[wk]||{})[r.date]=true;
+  });
+  var weeks=Object.keys(weekSets).sort();
+  var freq=weeks.map(function(w){return Object.keys(weekDays[w]).length;});
+  var setsPerWeek=weeks.map(function(w){return weekSets[w];});
+  drawBar('chartFreq','Trainingstage',weeks,freq);
+  drawBar('chartSets','Sätze',weeks,setsPerWeek);
+}
+function drawWeightChart(rows,exercise){
+  // max. Gewicht je Tag für die gewählte Übung
+  var byDate={};
+  rows.forEach(function(r){
+    if((r.exercise||'').toString().trim().toLowerCase()!==(exercise||'').toLowerCase())return;
+    var w=parseFloat(String(r.weight).replace(',','.'));if(isNaN(w))return;
+    if(byDate[r.date]==null||w>byDate[r.date])byDate[r.date]=w;
+  });
+  var dates=Object.keys(byDate).sort();
+  var vals=dates.map(function(d){return byDate[d];});
+  drawLine('chartWeight','Max. Gewicht',dates,vals);
+}
+var GREEN='#3f6b4f';
+function destroyChart(id){if(charts[id]){charts[id].destroy();delete charts[id];}}
+function drawLine(id,label,labels,data){
+  destroyChart(id);
+  charts[id]=new Chart(document.getElementById(id),{
+    type:'line',
+    data:{labels:labels,datasets:[{label:label,data:data,borderColor:GREEN,backgroundColor:'rgba(63,107,79,.15)',
+      tension:.25,fill:true,pointRadius:3,pointBackgroundColor:GREEN}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{y:{beginAtZero:false}}}
+  });
+}
+function drawBar(id,label,labels,data){
+  destroyChart(id);
+  charts[id]=new Chart(document.getElementById(id),{
+    type:'bar',
+    data:{labels:labels,datasets:[{label:label,data:data,backgroundColor:GREEN,borderRadius:6}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{y:{beginAtZero:true,ticks:{precision:0}}}}
+  });
 }
 
 /* ---------- HTTP ---------- */
@@ -569,6 +686,7 @@ document.addEventListener('DOMContentLoaded',function(){
   document.querySelector('header').addEventListener('dblclick',openCfg);
   document.getElementById('navLog').onclick=function(){switchTab('log');};
   document.getElementById('navCal').onclick=function(){switchTab('cal');};
+  document.getElementById('navAna').onclick=function(){switchTab('ana');};
   document.getElementById('calPrev').onclick=function(){shiftMonth(-1);};
   document.getElementById('calNext').onclick=function(){shiftMonth(1);};
   if(!getUrl()){openCfg();}else{loadEntries();fetchExercises();}
