@@ -86,6 +86,8 @@
   .entry .meta{font-size:13px;color:var(--muted);margin-top:3px;}
   .entry .cmt{font-size:12px;color:var(--muted);font-style:italic;margin-top:3px;}
   .entry .arrow{color:var(--green);font-size:20px;flex-shrink:0;}
+  .entry.pending{opacity:.55;}
+  .entry .pend{font-size:11px;}
   .section-title{font-size:15px;font-weight:700;color:var(--green-dark);margin:0 0 10px;}
   .empty{color:var(--muted);font-size:14px;text-align:center;padding:18px;}
   .status{
@@ -398,63 +400,76 @@ function save(){
       comment:s.querySelector('.s-comment').value
     });
   }
-  status('Speichere…','load');
-  // Prüfen, ob diese Übung am Tag schon existiert -> Satznummerierung fortsetzen
-  fetch(url+'?action=read&date='+encodeURIComponent(date))
-    .then(function(r){return r.json();})
-    .then(function(d){
-      var max=0;
-      (d.rows||[]).forEach(function(o){
-        if((o.exercise||'').toString().trim().toLowerCase()===exercise.toLowerCase()){
-          var nn=parseInt(o.setNo,10);if(!isNaN(nn)&&nn>max)max=nn;
-        }
-      });
-      var rows=inputs.map(function(s,i){
-        return {date:date,exercise:exercise,setNo:max+i+1,
-          reps:s.reps,weight:s.weight,unit:s.unit,equipment:s.equipment,comment:s.comment};
-      });
-      return postJSON(url,{action:'create',rows:rows});
-    })
-    .then(function(){
-      rememberExercise(exercise);
-      status('Gespeichert ✓','ok');
-      document.getElementById('exercise').value='';
-      document.getElementById('sets').innerHTML='';addSet();
-      loadEntries();
-    }).catch(function(e){status('Fehler beim Speichern: '+e.message,'err');});
+  // Satznummer aus den bereits angezeigten Einträgen fortführen (kein Vorab-Call)
+  var max=0;
+  currentEntries.forEach(function(o){
+    if(o.date===date && (o.exercise||'').toString().trim().toLowerCase()===exercise.toLowerCase()){
+      var nn=parseInt(o.setNo,10);if(!isNaN(nn)&&nn>max)max=nn;
+    }
+  });
+  // Optimistische Einträge sofort anzeigen
+  var optimistic=inputs.map(function(s,i){
+    return {id:'tmp_'+Date.now()+'_'+i,_pending:true,
+      date:date,exercise:exercise,setNo:max+i+1,
+      reps:s.reps,weight:s.weight,unit:s.unit,equipment:s.equipment,comment:s.comment};
+  });
+  optimistic.forEach(function(o){currentEntries.push(o);});
+  rememberExercise(exercise);
+  renderEntries();
+  status('Gespeichert ✓','ok');
+  document.getElementById('exercise').value='';
+  document.getElementById('sets').innerHTML='';addSet();
+
+  // Schreiben im Hintergrund
+  var payloadRows=optimistic.map(function(o){
+    return {date:o.date,exercise:o.exercise,setNo:o.setNo,
+      reps:o.reps,weight:o.weight,unit:o.unit,equipment:o.equipment,comment:o.comment};
+  });
+  postJSON(url,{action:'create',rows:payloadRows}).then(function(d){
+    var ids=(d&&d.ids)||[];
+    optimistic.forEach(function(o,i){o._pending=false;if(ids[i])o.id=ids[i];});
+    renderEntries();
+  }).catch(function(e){
+    // Rückgängig machen
+    currentEntries=currentEntries.filter(function(o){return optimistic.indexOf(o)===-1;});
+    renderEntries();
+    status('Fehler beim Speichern: '+e.message,'err');
+  });
 }
 
 /* ---------- Lesen (GET) ---------- */
+var currentEntries=[]; // im Speicher gehaltene Einträge des angezeigten Tages
 function loadEntries(){
   var url=getUrl();var date=document.getElementById('date').value;
   var box=document.getElementById('entries');
   document.getElementById('overviewTitle').textContent='Einträge'+(date?(' – '+date):'');
-  if(!url){box.innerHTML='<div class="empty">Bitte zuerst die Apps-Script-URL einrichten.</div>';return;}
-  if(!date){box.innerHTML='<div class="empty">Datum wählen.</div>';return;}
+  if(!url){currentEntries=[];box.innerHTML='<div class="empty">Bitte zuerst die Apps-Script-URL einrichten.</div>';return;}
+  if(!date){currentEntries=[];box.innerHTML='<div class="empty">Datum wählen.</div>';return;}
   box.innerHTML='<div class="empty">Lade…</div>';
   fetch(url+'?action=read&date='+encodeURIComponent(date))
     .then(function(r){return r.json();})
-    .then(function(data){renderEntries(data.rows||[]);})
+    .then(function(data){currentEntries=data.rows||[];renderEntries();})
     .catch(function(e){box.innerHTML='<div class="empty">Fehler beim Laden: '+e.message+'</div>';});
 }
-function renderEntries(rows){
+function renderEntries(){
   var box=document.getElementById('entries');
-  if(!rows.length){box.innerHTML='<div class="empty">Keine Einträge für dieses Datum.</div>';return;}
-  rows.sort(function(a,b){
+  if(!currentEntries.length){box.innerHTML='<div class="empty">Keine Einträge für dieses Datum.</div>';return;}
+  currentEntries.sort(function(a,b){
     if(a.exercise===b.exercise)return (a.setNo||0)-(b.setNo||0);
     return a.exercise<b.exercise?-1:1;
   });
   box.innerHTML='';
-  rows.forEach(function(r){
+  currentEntries.forEach(function(r){
     if(r.exercise) rememberExercise(r.exercise);
-    var d=document.createElement('div');d.className='entry';
+    var d=document.createElement('div');d.className='entry'+(r._pending?' pending':'');
     var equip=r.equipment?' · '+escapeHtml(r.equipment):'';
     var cmt=r.comment?'<div class="cmt">“'+escapeHtml(r.comment)+'”</div>':'';
+    var mark=r._pending?' <span class="pend">⏳</span>':'';
     d.innerHTML=
-      '<div><div class="ex">'+escapeHtml(r.exercise)+' · Satz '+r.setNo+'</div>'+
+      '<div><div class="ex">'+escapeHtml(r.exercise)+' · Satz '+r.setNo+mark+'</div>'+
       '<div class="meta">'+escapeHtml(r.reps)+' Reps × '+escapeHtml(r.weight)+' '+escapeHtml(r.unit)+equip+'</div>'+cmt+'</div>'+
       '<div class="arrow">›</div>';
-    d.onclick=function(){openEdit(r);};
+    if(!r._pending){d.onclick=function(){openEdit(r);};}
     box.appendChild(d);
   });
 }
@@ -475,9 +490,10 @@ function openEdit(r){
 function closeEdit(){document.getElementById('modalBg').classList.remove('show');editing=null;}
 function saveEdit(){
   var url=getUrl();if(!editing)return;
-  var payload={action:'update',row:{
-    id:editing.id,
-    date:editing.date,
+  var target=editing;
+  var prev={exercise:target.exercise,setNo:target.setNo,reps:target.reps,weight:target.weight,
+    unit:target.unit,equipment:target.equipment,comment:target.comment};
+  var next={
     exercise:document.getElementById('m_exercise').value.trim(),
     setNo:document.getElementById('m_setno').value,
     reps:document.getElementById('m_reps').value,
@@ -485,17 +501,28 @@ function saveEdit(){
     unit:document.getElementById('m_unit').value,
     equipment:document.getElementById('m_equipment').value,
     comment:document.getElementById('m_comment').value
-  }};
-  status('Speichere…','load');closeEdit();
-  postJSON(url,payload).then(function(){status('Aktualisiert ✓','ok');loadEntries();})
-    .catch(function(e){status('Fehler: '+e.message,'err');});
+  };
+  // Optimistisch im Speicher aktualisieren
+  for(var k in next){target[k]=next[k];}
+  closeEdit();renderEntries();status('Aktualisiert ✓','ok');
+  postJSON(url,{action:'update',row:{
+    id:target.id,date:target.date,exercise:next.exercise,setNo:next.setNo,
+    reps:next.reps,weight:next.weight,unit:next.unit,equipment:next.equipment,comment:next.comment
+  }}).catch(function(e){
+    for(var k in prev){target[k]=prev[k];} // zurücksetzen
+    renderEntries();status('Fehler: '+e.message,'err');
+  });
 }
 function deleteEdit(){
   var url=getUrl();if(!editing)return;
   if(!confirm('Diesen Eintrag löschen?'))return;
-  status('Lösche…','load');var id=editing.id;closeEdit();
-  postJSON(url,{action:'delete',row:{id:id}}).then(function(){status('Gelöscht ✓','ok');loadEntries();})
-    .catch(function(e){status('Fehler: '+e.message,'err');});
+  var target=editing;var id=target.id;closeEdit();
+  // Optimistisch entfernen
+  currentEntries=currentEntries.filter(function(o){return o!==target;});
+  renderEntries();status('Gelöscht ✓','ok');
+  postJSON(url,{action:'delete',row:{id:id}}).catch(function(e){
+    currentEntries.push(target);renderEntries();status('Fehler: '+e.message,'err');
+  });
 }
 
 /* ---------- Kalender ---------- */
