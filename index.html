@@ -328,7 +328,7 @@
    Trage hier deine Apps-Script-URL ein, oder lass sie leer
    und gib sie beim ersten Start in der App ein.
    ============================================================ */
-var SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzJC7nsN1lFvtv_VRyfM42OuFMuyYOw3CPikyF5fRNFn7DLHJlRuvg-4tFWj7gdciQ8bg/exec"; // <-- HIER deine /exec URL eintragen (optional)
+var SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxAk6sTtkmtgpjukxgmQkmJnZr52nETo8jxsPI27mCdHxN0Am0Yq7iG8wZZpq72QXDHGg/exec"; // <-- HIER deine /exec URL eintragen (optional)
 
 // Standard-Geräte (Seed) – im Einstellungen-Tab editierbar, dann im Sheet gespeichert
 var DEFAULT_EQUIPMENT = ["Machine","Resistance Band","Loop Band","Tube","Thera Loop","Body Weight","Kettlebell","TRX","Dumbbell","Barbell"];
@@ -441,6 +441,20 @@ function addSet(){
 function renumberSets(){
   var sets=document.getElementById('sets').children;
   for(var i=0;i<sets.length;i++){sets[i].querySelector('.set-head b').textContent='Satz '+(i+1);}
+}
+// Varianten-Felder offener Sätze neu bewerten (z. B. nachdem die Settings geladen wurden)
+function refreshAllSets(){
+  var sets=document.getElementById('sets').children;
+  for(var i=0;i<sets.length;i++){
+    var vsel=sets[i].querySelector('.s-variant');
+    refreshVariant(sets[i],'s-',vsel?vsel.value:"");
+  }
+  // Gerät-Dropdowns an aktuelle Liste angleichen (Auswahl beibehalten)
+  for(var j=0;j<sets.length;j++){
+    var esel=sets[j].querySelector('.s-equipment');
+    var cur=esel.value;
+    esel.innerHTML=equipmentOptions(cur);
+  }
 }
 
 /* ---------- Gespeicherte Übungen / Autocomplete ---------- */
@@ -750,7 +764,16 @@ function settRowTemplate(equipment,label,weight){
   d.querySelector('.del-row').onclick=function(){d.remove();};
   return d;
 }
+// Beim Öffnen des Tabs frische Daten aus dem Sheet ziehen, dann rendern
 function loadSettingsTab(){
+  var st=document.getElementById('setStatus');
+  st.textContent='Lade…';st.className='status show load';
+  var pending=2;
+  function done(){if(--pending===0){st.className='status';renderSettingsTab();}}
+  fetchTypes(done);
+  fetchSettings(done);
+}
+function renderSettingsTab(){
   // Geräteliste
   var tbox=document.getElementById('typeRows');tbox.innerHTML='';
   var list=equipmentTypes.length?equipmentTypes:DEFAULT_EQUIPMENT;
@@ -902,7 +925,7 @@ document.addEventListener('DOMContentLoaded',function(){
   document.getElementById('modalBg').onclick=function(e){if(e.target.id==='modalBg')closeEdit();};
   document.getElementById('cfgSave').onclick=function(){
     var u=document.getElementById('cfgUrl').value.trim();
-    if(u){setUrl(u);closeCfg();loadEntries();fetchExercises();fetchSettings();fetchTypes();status('URL gespeichert ✓','ok');}
+    if(u){setUrl(u);closeCfg();loadEntries();fetchExercises();fetchSettings(refreshAllSets);fetchTypes(refreshAllSets);status('URL gespeichert ✓','ok');}
   };
   document.getElementById('cfgBg').onclick=function(e){if(e.target.id==='cfgBg')closeCfg();};
   document.querySelector('header').addEventListener('dblclick',openCfg);
@@ -919,7 +942,7 @@ document.addEventListener('DOMContentLoaded',function(){
     document.getElementById('typeRows').appendChild(typeRowTemplate(''));
   };
   document.getElementById('setSave').onclick=saveSettingsTab;
-  if(!getUrl()){openCfg();}else{loadEntries();fetchExercises();fetchSettings();fetchTypes();}
+  if(!getUrl()){openCfg();}else{loadEntries();fetchExercises();fetchSettings(refreshAllSets);fetchTypes(refreshAllSets);}
 });
 
 /* ============================================================
