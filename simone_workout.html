@@ -1,0 +1,993 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#3f6b4f" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Gym Tracker" />
+<link rel="apple-touch-icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" />
+<title>Gym Tracker</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#e9ecea;
+    --card:#f6f8f7;
+    --green:#3f6b4f;
+    --green-dark:#2f5240;
+    --green-light:#e3ede7;
+    --text:#1f2622;
+    --muted:#6b756f;
+    --border:#cfd6d2;
+    --danger:#b3503f;
+    --radius:14px;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg);color:var(--text);
+    padding:env(safe-area-inset-top) 0 calc(72px + env(safe-area-inset-bottom));
+    -webkit-text-size-adjust:100%;
+  }
+  header{
+    background:var(--green);color:#fff;
+    padding:18px 16px;text-align:center;
+    position:sticky;top:0;z-index:10;
+    box-shadow:0 2px 8px rgba(0,0,0,.12);
+  }
+  header h1{margin:0;font-size:20px;font-weight:700;letter-spacing:.3px;}
+  header .sub{font-size:12px;opacity:.85;margin-top:2px;}
+  .wrap{max-width:560px;margin:0 auto;padding:16px;}
+  .card{
+    background:var(--card);border:1px solid var(--border);
+    border-radius:var(--radius);padding:16px;margin-bottom:16px;
+    box-shadow:0 1px 3px rgba(0,0,0,.05);
+  }
+  label{display:block;font-size:13px;font-weight:600;color:var(--muted);margin:0 0 6px;}
+  input,select,textarea{
+    width:100%;font-size:16px;padding:14px;border:1px solid var(--border);
+    border-radius:10px;background:#fff;color:var(--text);font-family:inherit;
+  }
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 3px var(--green-light);}
+  input[type="date"]{-webkit-appearance:none;appearance:none;min-width:0;max-width:100%;}
+  input[type="date"]::-webkit-date-and-time-value{text-align:left;}
+  .field{margin-bottom:14px;}
+  .row{display:flex;gap:10px;}
+  .row>div{flex:1;}
+  .set{
+    background:#fff;border:1px solid var(--border);border-radius:12px;
+    padding:12px;margin-bottom:10px;position:relative;
+  }
+  .set .set-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
+  .set .set-head b{font-size:13px;color:var(--green-dark);}
+  .set .del-set{
+    background:none;border:none;color:var(--danger);font-size:13px;
+    font-weight:600;padding:6px 8px;cursor:pointer;
+  }
+  button{font-family:inherit;cursor:pointer;}
+  .btn{
+    width:100%;background:var(--green);color:#fff;border:none;
+    padding:16px;border-radius:12px;font-size:16px;font-weight:700;
+    margin-top:6px;
+  }
+  .btn:active{background:var(--green-dark);}
+  .btn.secondary{background:var(--green-light);color:var(--green-dark);}
+  .btn.add{background:#fff;color:var(--green-dark);border:1.5px dashed var(--green);}
+  .btn.danger{background:var(--danger);}
+  .entry{
+    background:#fff;border:1px solid var(--border);border-radius:12px;
+    padding:12px 14px;margin-bottom:10px;cursor:pointer;
+    display:flex;justify-content:space-between;align-items:center;gap:10px;
+  }
+  .entry:active{background:var(--green-light);}
+  .entry .ex{font-weight:700;font-size:15px;}
+  .entry .meta{font-size:13px;color:var(--muted);margin-top:3px;}
+  .entry .cmt{font-size:12px;color:var(--muted);font-style:italic;margin-top:3px;}
+  .entry .arrow{color:var(--green);font-size:20px;flex-shrink:0;}
+  .entry.pending{opacity:.55;}
+  .entry .pend{font-size:11px;}
+  .section-title{font-size:15px;font-weight:700;color:var(--green-dark);margin:0 0 10px;}
+  .empty{color:var(--muted);font-size:14px;text-align:center;padding:18px;}
+  .status{
+    font-size:13px;text-align:center;padding:10px;border-radius:10px;
+    margin-bottom:12px;display:none;
+  }
+  .status.show{display:block;}
+  .status.ok{background:var(--green-light);color:var(--green-dark);}
+  .status.err{background:#f5d9d3;color:var(--danger);}
+  .status.load{background:#e6e9e7;color:var(--muted);}
+  .modal-bg{
+    position:fixed;inset:0;background:rgba(20,26,23,.55);
+    display:none;align-items:flex-end;z-index:50;
+  }
+  .modal-bg.show{display:flex;}
+  .modal{
+    background:var(--bg);width:100%;max-width:560px;margin:0 auto;
+    border-radius:18px 18px 0 0;padding:18px 16px 26px;
+    max-height:90vh;overflow:auto;
+  }
+  .modal h3{margin:0 0 14px;color:var(--green-dark);font-size:17px;}
+  .config-note{font-size:12px;color:var(--muted);margin-top:8px;line-height:1.4;}
+  datalist{display:none;}
+
+  /* Tabs */
+  .tab{display:none;}
+  .tab.active{display:block;}
+  .tabbar{
+    position:fixed;left:0;right:0;bottom:0;z-index:40;
+    display:flex;background:#fff;border-top:1px solid var(--border);
+    padding-bottom:env(safe-area-inset-bottom);
+  }
+  .tabbar button{
+    flex:1;background:none;border:none;padding:12px 0 10px;
+    font-size:12px;font-weight:600;color:var(--muted);
+    display:flex;flex-direction:column;align-items:center;gap:3px;
+  }
+  .tabbar button.active{color:var(--green-dark);}
+  .tabbar .ic{font-size:20px;line-height:1;}
+
+  /* Kalender */
+  .cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+  .cal-head button{
+    background:var(--green-light);color:var(--green-dark);border:none;
+    width:44px;height:44px;border-radius:12px;font-size:20px;font-weight:700;
+  }
+  .cal-head .mlabel{font-size:16px;font-weight:700;color:var(--green-dark);}
+  .stats{display:flex;gap:10px;margin-bottom:16px;}
+  .stat{flex:1;background:var(--green);color:#fff;border-radius:14px;padding:14px;text-align:center;}
+  .stat .num{font-size:26px;font-weight:800;line-height:1;}
+  .stat .lab{font-size:11px;opacity:.9;margin-top:6px;}
+  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;}
+  .cal-grid .dow{text-align:center;font-size:11px;font-weight:700;color:var(--muted);padding-bottom:2px;}
+  .cal-cell{
+    aspect-ratio:1/1;display:flex;align-items:center;justify-content:center;
+    border-radius:10px;font-size:14px;color:var(--text);position:relative;
+    background:#fff;border:1px solid var(--border);
+  }
+  .cal-cell.empty{background:transparent;border:none;}
+  .cal-cell.today{outline:2px solid var(--green);}
+  .cal-cell.has{background:var(--green);color:#fff;font-weight:700;cursor:pointer;}
+  .cal-cell .dot{position:absolute;bottom:5px;font-size:9px;opacity:.9;}
+  .cal-legend{font-size:12px;color:var(--muted);margin-top:12px;text-align:center;}
+
+  /* Analyse */
+  .chart-wrap{position:relative;height:240px;margin-top:6px;}
+
+  /* Einstellungen-Tabelle */
+  .settbl-head,.settbl-row{display:grid;grid-template-columns:1.3fr 1.1fr .8fr 32px;gap:6px;align-items:center;}
+  .settbl-head{font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px;padding:0 2px;}
+  .settbl-row{margin-bottom:8px;}
+  .settbl-row select,.settbl-row input{padding:10px;font-size:14px;}
+  .settbl-row .del-row{background:none;border:none;color:var(--danger);font-size:20px;font-weight:700;padding:0;}
+  .typerow{display:grid;grid-template-columns:1fr 32px;gap:6px;align-items:center;margin-bottom:8px;}
+  .typerow input{padding:10px;font-size:14px;}
+  .typerow .del-row{background:none;border:none;color:var(--danger);font-size:20px;font-weight:700;padding:0;}
+</style>
+</head>
+<body>
+<header>
+  <h1>Gym Tracker</h1>
+  <div class="sub">Training protokollieren</div>
+</header>
+
+<!-- ===== TAB: ERFASSEN ===== -->
+<div class="tab active" id="tab-log">
+<div class="wrap">
+  <div id="status" class="status"></div>
+
+  <div class="card">
+    <div class="field">
+      <label for="date">Datum</label>
+      <input type="date" id="date" />
+    </div>
+    <div class="field">
+      <label for="exercise">Übung</label>
+      <input type="text" id="exercise" list="exerciseList" placeholder="z. B. Bankdrücken" autocomplete="off" />
+      <datalist id="exerciseList"></datalist>
+    </div>
+
+    <label>Sätze</label>
+    <div id="sets"></div>
+    <button class="btn add" id="addSet">+ Satz hinzufügen</button>
+    <button class="btn" id="save" style="margin-top:12px;">Speichern</button>
+  </div>
+
+  <div class="card">
+    <div class="section-title" id="overviewTitle">Einträge</div>
+    <div id="entries"><div class="empty">Lade…</div></div>
+  </div>
+</div>
+</div>
+
+<!-- ===== TAB: KALENDER ===== -->
+<div class="tab" id="tab-cal">
+<div class="wrap">
+  <div class="card">
+    <div class="cal-head">
+      <button id="calPrev">‹</button>
+      <div class="mlabel" id="calLabel">—</div>
+      <button id="calNext">›</button>
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="num" id="statTrainings">0</div><div class="lab">Trainings diesen Monat</div></div>
+      <div class="stat"><div class="num" id="statSets">0</div><div class="lab">Sätze diesen Monat</div></div>
+    </div>
+    <div class="cal-grid" id="calGrid"></div>
+    <div class="cal-legend">Grün = Trainingstag · antippen öffnet den Tag</div>
+  </div>
+</div>
+</div>
+
+<!-- ===== TAB: ANALYSE ===== -->
+<div class="tab" id="tab-ana">
+<div class="wrap">
+  <div id="anaStatus" class="empty">Lade…</div>
+  <div class="card" id="anaWeightCard" style="display:none;">
+    <div class="section-title">Gewichtsänderung je Übung</div>
+    <div class="field" style="margin-bottom:6px;">
+      <label for="anaExercise">Übung</label>
+      <select id="anaExercise"></select>
+    </div>
+    <div class="chart-wrap"><canvas id="chartWeight"></canvas></div>
+  </div>
+  <div class="card" id="anaFreqCard" style="display:none;">
+    <div class="section-title">Trainingshäufigkeit je Woche</div>
+    <div class="chart-wrap"><canvas id="chartFreq"></canvas></div>
+  </div>
+  <div class="card" id="anaSetsCard" style="display:none;">
+    <div class="section-title">Sätze je Woche</div>
+    <div class="chart-wrap"><canvas id="chartSets"></canvas></div>
+  </div>
+</div>
+</div>
+
+<!-- ===== TAB: EINSTELLUNGEN ===== -->
+<div class="tab" id="tab-set">
+<div class="wrap">
+  <div id="setStatus" class="status"></div>
+  <div class="card">
+    <div class="section-title">Varianten</div>
+    <p style="font-size:13px;color:var(--muted);margin:0 0 12px;line-height:1.4;">
+      Hinterlege je Variante eine Bezeichnung (z. B. Farbe) und das Gewicht. Im Erfassen-Tab erscheint dann bei diesem Gerät ein Varianten-Dropdown und das Gewicht wird automatisch übernommen.
+    </p>
+    <div class="settbl-head">
+      <div>Gerät</div><div>Bezeichnung</div><div>Gewicht</div><div></div>
+    </div>
+    <div id="setRows"></div>
+    <button class="btn add" id="setAddRow">+ Zeile hinzufügen</button>
+  </div>
+  <div class="card">
+    <div class="section-title">Geräte</div>
+    <p style="font-size:13px;color:var(--muted);margin:0 0 12px;line-height:1.4;">
+      Lege fest, welche Geräte in den Dropdowns zur Auswahl stehen.
+    </p>
+    <div id="typeRows"></div>
+    <button class="btn add" id="typeAddRow">+ Gerät hinzufügen</button>
+  </div>
+  <button class="btn" id="setSave">Alles speichern</button>
+</div>
+</div>
+
+<!-- Bearbeiten Modal -->
+<div class="modal-bg" id="modalBg">
+  <div class="modal">
+    <h3>Eintrag bearbeiten</h3>
+    <div class="field">
+      <label>Übung</label>
+      <input type="text" id="m_exercise" list="exerciseList" />
+    </div>
+    <div class="field"><label>Gerät</label>
+      <select class="m-equipment" id="m_equipment"></select>
+    </div>
+    <div class="field m-variant-field" style="display:none;"><label>Variante</label>
+      <select class="m-variant" id="m_variant"></select>
+    </div>
+    <div class="row">
+      <div class="field"><label>Satz-Nr.</label><input type="number" id="m_setno" inputmode="numeric" /></div>
+      <div class="field"><label>Reps</label><input type="number" id="m_reps" inputmode="numeric" /></div>
+    </div>
+    <div class="row">
+      <div class="field"><label>Gewicht</label><input type="number" class="m-weight" id="m_weight" inputmode="decimal" step="0.5" /></div>
+      <div class="field"><label>Einheit</label>
+        <select id="m_unit"><option value="kg">kg</option><option value="lbs">lbs</option></select>
+      </div>
+    </div>
+    <div class="field"><label>Kommentar</label><input type="text" class="m-comment" id="m_comment" /></div>
+    <button class="btn" id="m_save">Änderungen speichern</button>
+    <button class="btn danger" id="m_delete" style="margin-top:10px;">Löschen</button>
+    <button class="btn secondary" id="m_cancel" style="margin-top:10px;">Abbrechen</button>
+  </div>
+</div>
+
+<!-- Config Modal -->
+<div class="modal-bg" id="cfgBg">
+  <div class="modal">
+    <h3>Einrichtung</h3>
+    <div class="field">
+      <label>Apps Script Web-App URL</label>
+      <input type="url" id="cfgUrl" placeholder="https://script.google.com/macros/s/…/exec" />
+    </div>
+    <button class="btn" id="cfgSave">Speichern</button>
+    <div class="config-note">Diese URL erhältst du beim Deployen des Google Apps Scripts (siehe Setup-Anleitung). Sie wird lokal auf deinem Gerät gespeichert. Du kannst dieses Fenster jederzeit per Doppeltipp auf die Kopfzeile wieder öffnen.</div>
+  </div>
+</div>
+
+<!-- Tab-Leiste -->
+<nav class="tabbar">
+  <button id="navLog" class="active"><span class="ic">📝</span>Erfassen</button>
+  <button id="navCal"><span class="ic">📅</span>Kalender</button>
+  <button id="navAna"><span class="ic">📊</span>Analyse</button>
+  <button id="navSet"><span class="ic">⚙️</span>Einstellungen</button>
+</nav>
+
+<script>
+/* ============================================================
+   KONFIGURATION
+   Trage hier deine Apps-Script-URL ein, oder lass sie leer
+   und gib sie beim ersten Start in der App ein.
+   ============================================================ */
+var SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwYfhdOAC_7KeBkqRH4sbbVBwQG3ndMHYfG7tOpULYw2jOqOAXsa19njkAhMyqPuWZ1/exec"; // <-- HIER deine /exec URL eintragen (optional)
+
+// Standard-Geräte (Seed) – im Einstellungen-Tab editierbar, dann im Sheet gespeichert
+var DEFAULT_EQUIPMENT = ["Machine","Resistance Band","Loop Band","Tube","Thera Loop","Body Weight","Kettlebell","TRX","Dumbbell","Barbell"];
+
+/* ---------- State ---------- */
+var STORE_URL = "gymtracker_url";
+var STORE_EX  = "gymtracker_exercises";
+var STORE_TYPES = "gymtracker_types";
+var STORE_SETTINGS = "gymtracker_settings";
+var calYear, calMonth; // calMonth 0-basiert
+var equipmentTypes = DEFAULT_EQUIPMENT.slice(); // editierbare Geräteliste (lokaler Stand)
+var equipSettings = []; // [{equipment,label,weight}] (lokaler Stand)
+
+function getUrl(){ return SCRIPT_URL || localStorage.getItem(STORE_URL) || ""; }
+function setUrl(u){ localStorage.setItem(STORE_URL,u); }
+
+/* ---------- Status ---------- */
+function status(msg,type){
+  var el=document.getElementById('status');
+  el.textContent=msg;el.className='status show '+(type||'load');
+  if(type==='ok'){setTimeout(function(){el.className='status';},2500);}
+}
+
+/* ---------- Equipment-Dropdown ---------- */
+function equipmentOptions(selected){
+  var list=[""].concat(equipmentTypes.slice());
+  // ausgewähltes, aber (noch) nicht gelistetes Gerät ergänzen
+  if(selected && list.indexOf(selected)===-1) list.push(selected);
+  return list.map(function(v){
+    var lab=v===""?"– Gerät –":escapeHtml(v);
+    return '<option value="'+escapeHtml(v)+'"'+(v===selected?' selected':'')+'>'+lab+'</option>';
+  }).join('');
+}
+// Varianten (Bezeichnungen aus Spalte 2) für ein Gerät
+function variantsFor(equipment){
+  return equipSettings.filter(function(e){return e.equipment===equipment;})
+                      .map(function(e){return e.label;})
+                      .filter(function(l){return l;});
+}
+function variantOptions(equipment,selected){
+  var opts='<option value="">– Variante –</option>';
+  variantsFor(equipment).forEach(function(l){
+    opts+='<option value="'+escapeHtml(l)+'"'+(l===selected?' selected':'')+'>'+escapeHtml(l)+'</option>';
+  });
+  return opts;
+}
+function weightFor(equipment,label){
+  for(var i=0;i<equipSettings.length;i++){
+    if(equipSettings[i].equipment===equipment && equipSettings[i].label===label) return equipSettings[i].weight;
+  }
+  return null;
+}
+
+/* ---------- Sätze (Eingabe) ---------- */
+// Varianten-Feld eines Satzes/Modals auf Basis des gewählten Geräts aktualisieren
+function refreshVariant(scope,prefix,preselect){
+  var eq=scope.querySelector('.'+prefix+'equipment').value;
+  var field=scope.querySelector('.'+prefix+'variant-field');
+  var sel=scope.querySelector('.'+prefix+'variant');
+  if(variantsFor(eq).length>0){
+    sel.innerHTML=variantOptions(eq,preselect||"");
+    field.style.display='';
+  }else{
+    sel.innerHTML='';field.style.display='none';
+  }
+}
+function applyVariant(scope,prefix){
+  var eq=scope.querySelector('.'+prefix+'equipment').value;
+  var label=scope.querySelector('.'+prefix+'variant').value;
+  if(!label)return;
+  var w=weightFor(eq,label);
+  if(w!==null&&w!==''&&w!==undefined) scope.querySelector('.'+prefix+'weight').value=w;
+  scope.querySelector('.'+prefix+'comment').value=label; // Auswahl ins Kommentarfeld
+}
+function setTemplate(n,reps,weight,unit,equipment,comment,variant){
+  var d=document.createElement('div');
+  d.className='set';
+  d.innerHTML=
+    '<div class="set-head"><b>Satz '+n+'</b><button class="del-set" type="button">Entfernen</button></div>'+
+    '<div class="field" style="margin-bottom:8px;"><label>Gerät</label><select class="s-equipment">'+equipmentOptions(equipment||"")+'</select></div>'+
+    '<div class="field s-variant-field" style="margin-bottom:8px;display:none;"><label>Variante</label><select class="s-variant"></select></div>'+
+    '<div class="row">'+
+      '<div class="field" style="margin-bottom:8px;"><label>Reps</label><input type="number" class="s-reps" inputmode="numeric" value="'+(reps||'')+'"></div>'+
+      '<div class="field" style="margin-bottom:8px;"><label>Gewicht</label><input type="number" class="s-weight" inputmode="decimal" step="0.5" value="'+(weight||'')+'"></div>'+
+      '<div class="field" style="margin-bottom:8px;max-width:90px;"><label>Einheit</label><select class="s-unit"><option value="kg">kg</option><option value="lbs">lbs</option></select></div>'+
+    '</div>'+
+    '<div class="field" style="margin-bottom:0;"><label>Kommentar</label><input type="text" class="s-comment" placeholder="optional" value="'+(comment||'').replace(/"/g,'&quot;')+'"></div>';
+  if(unit==='lbs') d.querySelector('.s-unit').value='lbs';
+  d.querySelector('.del-set').onclick=function(){d.remove();renumberSets();};
+  d.querySelector('.s-equipment').onchange=function(){refreshVariant(d,'s-');};
+  d.querySelector('.s-variant').onchange=function(){applyVariant(d,'s-');};
+  refreshVariant(d,'s-',variant||"");
+  return d;
+}
+function addSet(){
+  var sets=document.getElementById('sets');
+  var n=sets.children.length+1;
+  var prev=sets.children[sets.children.length-1];
+  if(prev){
+    // Werte vom vorherigen Satz übernehmen (inkl. Variante)
+    sets.appendChild(setTemplate(n,
+      prev.querySelector('.s-reps').value,
+      prev.querySelector('.s-weight').value,
+      prev.querySelector('.s-unit').value,
+      prev.querySelector('.s-equipment').value,
+      prev.querySelector('.s-comment').value,
+      prev.querySelector('.s-variant')?prev.querySelector('.s-variant').value:""));
+  }else{
+    sets.appendChild(setTemplate(n));
+  }
+}
+function renumberSets(){
+  var sets=document.getElementById('sets').children;
+  for(var i=0;i<sets.length;i++){sets[i].querySelector('.set-head b').textContent='Satz '+(i+1);}
+}
+// Varianten-Felder offener Sätze neu bewerten (z. B. nachdem die Settings geladen wurden)
+function refreshAllSets(){
+  var sets=document.getElementById('sets').children;
+  for(var i=0;i<sets.length;i++){
+    var vsel=sets[i].querySelector('.s-variant');
+    refreshVariant(sets[i],'s-',vsel?vsel.value:"");
+  }
+  // Gerät-Dropdowns an aktuelle Liste angleichen (Auswahl beibehalten)
+  for(var j=0;j<sets.length;j++){
+    var esel=sets[j].querySelector('.s-equipment');
+    var cur=esel.value;
+    esel.innerHTML=equipmentOptions(cur);
+  }
+}
+
+/* ---------- Gespeicherte Übungen / Autocomplete ---------- */
+function readLocalEx(){var a=[];try{a=JSON.parse(localStorage.getItem(STORE_EX)||"[]");}catch(e){}return a;}
+function writeLocalEx(a){localStorage.setItem(STORE_EX,JSON.stringify(a));}
+function renderExDatalist(){
+  var arr=readLocalEx();
+  var dl=document.getElementById('exerciseList');dl.innerHTML='';
+  arr.forEach(function(x){var o=document.createElement('option');o.value=x;dl.appendChild(o);});
+}
+function rememberExercise(name){
+  if(!name)return;
+  var arr=readLocalEx();
+  if(arr.indexOf(name)===-1){arr.push(name);arr.sort();writeLocalEx(arr);renderExDatalist();}
+}
+// Vollständige Übungsliste vom Sheet laden (geräteübergreifend)
+function fetchExercises(){
+  var url=getUrl();if(!url)return;
+  fetch(url+'?action=exercises')
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(d&&d.exercises){
+        var merged=readLocalEx();
+        d.exercises.forEach(function(n){if(n&&merged.indexOf(n)===-1)merged.push(n);});
+        merged.sort();writeLocalEx(merged);renderExDatalist();
+      }
+    }).catch(function(){});
+}
+/* ---------- Lokaler Cache für Geräte & Varianten ---------- */
+function loadEquipCache(){
+  try{var t=JSON.parse(localStorage.getItem(STORE_TYPES)||"null");if(t&&t.length)equipmentTypes=t;}catch(e){}
+  try{var s=JSON.parse(localStorage.getItem(STORE_SETTINGS)||"null");if(s)equipSettings=s;}catch(e){}
+}
+function saveEquipCache(){
+  try{localStorage.setItem(STORE_TYPES,JSON.stringify(equipmentTypes));}catch(e){}
+  try{localStorage.setItem(STORE_SETTINGS,JSON.stringify(equipSettings));}catch(e){}
+}
+// Equipment-Einstellungen (Varianten) vom Sheet laden + lokal cachen
+function fetchSettings(cb){
+  var url=getUrl();if(!url){if(cb)cb();return;}
+  fetch(url+'?action=settings')
+    .then(function(r){return r.json();})
+    .then(function(d){equipSettings=(d&&d.settings)||[];saveEquipCache();if(cb)cb();})
+    .catch(function(){if(cb)cb();});
+}
+// Geräteliste vom Sheet laden + lokal cachen (Fallback: Standardliste)
+function fetchTypes(cb){
+  var url=getUrl();if(!url){if(cb)cb();return;}
+  fetch(url+'?action=types')
+    .then(function(r){return r.json();})
+    .then(function(d){
+      var t=(d&&d.types)||[];
+      if(t.length)equipmentTypes=t;
+      saveEquipCache();
+      if(cb)cb();
+    })
+    .catch(function(){if(cb)cb();});
+}
+
+/* ---------- Speichern (POST) ---------- */
+function save(){
+  var url=getUrl();
+  if(!url){openCfg();return;}
+  var date=document.getElementById('date').value;
+  var exercise=document.getElementById('exercise').value.trim();
+  if(!date){status('Bitte Datum wählen.','err');return;}
+  if(!exercise){status('Bitte Übung eingeben.','err');return;}
+  var setEls=document.getElementById('sets').children;
+  if(setEls.length===0){status('Bitte mindestens einen Satz hinzufügen.','err');return;}
+  var inputs=[];
+  for(var i=0;i<setEls.length;i++){
+    var s=setEls[i];
+    inputs.push({
+      reps:s.querySelector('.s-reps').value,
+      weight:s.querySelector('.s-weight').value,
+      unit:s.querySelector('.s-unit').value,
+      equipment:s.querySelector('.s-equipment').value,
+      comment:s.querySelector('.s-comment').value
+    });
+  }
+  // Satznummer aus den bereits angezeigten Einträgen fortführen (kein Vorab-Call)
+  var max=0;
+  currentEntries.forEach(function(o){
+    if(o.date===date && (o.exercise||'').toString().trim().toLowerCase()===exercise.toLowerCase()){
+      var nn=parseInt(o.setNo,10);if(!isNaN(nn)&&nn>max)max=nn;
+    }
+  });
+  // Optimistische Einträge sofort anzeigen
+  var optimistic=inputs.map(function(s,i){
+    return {id:'tmp_'+Date.now()+'_'+i,_pending:true,
+      date:date,exercise:exercise,setNo:max+i+1,
+      reps:s.reps,weight:s.weight,unit:s.unit,equipment:s.equipment,comment:s.comment};
+  });
+  optimistic.forEach(function(o){currentEntries.push(o);});
+  rememberExercise(exercise);
+  renderEntries();
+  status('Gespeichert ✓','ok');
+  document.getElementById('exercise').value='';
+  document.getElementById('sets').innerHTML='';addSet();
+
+  // Schreiben im Hintergrund
+  var payloadRows=optimistic.map(function(o){
+    return {date:o.date,exercise:o.exercise,setNo:o.setNo,
+      reps:o.reps,weight:o.weight,unit:o.unit,equipment:o.equipment,comment:o.comment};
+  });
+  postJSON(url,{action:'create',rows:payloadRows}).then(function(d){
+    var ids=(d&&d.ids)||[];
+    optimistic.forEach(function(o,i){o._pending=false;if(ids[i])o.id=ids[i];});
+    renderEntries();
+  }).catch(function(e){
+    // Rückgängig machen
+    currentEntries=currentEntries.filter(function(o){return optimistic.indexOf(o)===-1;});
+    renderEntries();
+    status('Fehler beim Speichern: '+e.message,'err');
+  });
+}
+
+/* ---------- Lesen (GET) ---------- */
+var currentEntries=[]; // im Speicher gehaltene Einträge des angezeigten Tages
+function loadEntries(){
+  var url=getUrl();var date=document.getElementById('date').value;
+  var box=document.getElementById('entries');
+  document.getElementById('overviewTitle').textContent='Einträge'+(date?(' – '+date):'');
+  if(!url){currentEntries=[];box.innerHTML='<div class="empty">Bitte zuerst die Apps-Script-URL einrichten.</div>';return;}
+  if(!date){currentEntries=[];box.innerHTML='<div class="empty">Datum wählen.</div>';return;}
+  box.innerHTML='<div class="empty">Lade…</div>';
+  fetch(url+'?action=read&date='+encodeURIComponent(date))
+    .then(function(r){return r.json();})
+    .then(function(data){currentEntries=data.rows||[];renderEntries();})
+    .catch(function(e){box.innerHTML='<div class="empty">Fehler beim Laden: '+e.message+'</div>';});
+}
+function renderEntries(){
+  var box=document.getElementById('entries');
+  if(!currentEntries.length){box.innerHTML='<div class="empty">Keine Einträge für dieses Datum.</div>';return;}
+  currentEntries.sort(function(a,b){
+    if(a.exercise===b.exercise)return (a.setNo||0)-(b.setNo||0);
+    return a.exercise<b.exercise?-1:1;
+  });
+  box.innerHTML='';
+  currentEntries.forEach(function(r){
+    if(r.exercise) rememberExercise(r.exercise);
+    var d=document.createElement('div');d.className='entry'+(r._pending?' pending':'');
+    var equip=r.equipment?' · '+escapeHtml(r.equipment):'';
+    var cmt=r.comment?'<div class="cmt">“'+escapeHtml(r.comment)+'”</div>':'';
+    var mark=r._pending?' <span class="pend">⏳</span>':'';
+    d.innerHTML=
+      '<div><div class="ex">'+escapeHtml(r.exercise)+' · Satz '+r.setNo+mark+'</div>'+
+      '<div class="meta">'+escapeHtml(r.reps)+' Reps × '+escapeHtml(r.weight)+' '+escapeHtml(r.unit)+equip+'</div>'+cmt+'</div>'+
+      '<div class="arrow">›</div>';
+    if(!r._pending){d.onclick=function(){openEdit(r);};}
+    box.appendChild(d);
+  });
+}
+
+/* ---------- Bearbeiten ---------- */
+var editing=null;
+function openEdit(r){
+  editing=r;
+  var modal=document.getElementById('modalBg');
+  document.getElementById('m_exercise').value=r.exercise;
+  document.getElementById('m_setno').value=r.setNo;
+  document.getElementById('m_reps').value=r.reps;
+  document.getElementById('m_weight').value=r.weight;
+  document.getElementById('m_unit').value=r.unit==='lbs'?'lbs':'kg';
+  document.getElementById('m_equipment').innerHTML=equipmentOptions(r.equipment||"");
+  document.getElementById('m_comment').value=r.comment||'';
+  // Variante: vorbelegen, falls Kommentar einer bekannten Bezeichnung entspricht
+  var pre=variantsFor(r.equipment||"").indexOf(r.comment||"")!==-1?r.comment:"";
+  refreshVariant(modal,'m-',pre);
+  document.getElementById('m_equipment').onchange=function(){refreshVariant(modal,'m-');};
+  document.getElementById('m_variant').onchange=function(){applyVariant(modal,'m-');};
+  modal.classList.add('show');
+}
+function closeEdit(){document.getElementById('modalBg').classList.remove('show');editing=null;}
+function saveEdit(){
+  var url=getUrl();if(!editing)return;
+  var target=editing;
+  var prev={exercise:target.exercise,setNo:target.setNo,reps:target.reps,weight:target.weight,
+    unit:target.unit,equipment:target.equipment,comment:target.comment};
+  var next={
+    exercise:document.getElementById('m_exercise').value.trim(),
+    setNo:document.getElementById('m_setno').value,
+    reps:document.getElementById('m_reps').value,
+    weight:document.getElementById('m_weight').value,
+    unit:document.getElementById('m_unit').value,
+    equipment:document.getElementById('m_equipment').value,
+    comment:document.getElementById('m_comment').value
+  };
+  // Optimistisch im Speicher aktualisieren
+  for(var k in next){target[k]=next[k];}
+  closeEdit();renderEntries();status('Aktualisiert ✓','ok');
+  postJSON(url,{action:'update',row:{
+    id:target.id,date:target.date,exercise:next.exercise,setNo:next.setNo,
+    reps:next.reps,weight:next.weight,unit:next.unit,equipment:next.equipment,comment:next.comment
+  }}).catch(function(e){
+    for(var k in prev){target[k]=prev[k];} // zurücksetzen
+    renderEntries();status('Fehler: '+e.message,'err');
+  });
+}
+function deleteEdit(){
+  var url=getUrl();if(!editing)return;
+  if(!confirm('Diesen Eintrag löschen?'))return;
+  var target=editing;var id=target.id;closeEdit();
+  // Optimistisch entfernen
+  currentEntries=currentEntries.filter(function(o){return o!==target;});
+  renderEntries();status('Gelöscht ✓','ok');
+  postJSON(url,{action:'delete',row:{id:id}}).catch(function(e){
+    currentEntries.push(target);renderEntries();status('Fehler: '+e.message,'err');
+  });
+}
+
+/* ---------- Kalender ---------- */
+var MONTHS=['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+function pad2(n){return (n<10?'0':'')+n;}
+function loadCalendar(){
+  var url=getUrl();
+  var label=document.getElementById('calLabel');
+  label.textContent=MONTHS[calMonth]+' '+calYear;
+  var monthStr=calYear+'-'+pad2(calMonth+1);
+  if(!url){renderCalendar({});return;}
+  fetch(url+'?action=month&month='+monthStr)
+    .then(function(r){return r.json();})
+    .then(function(d){
+      var rows=d.rows||[];
+      var byDay={}; // 'YYYY-MM-DD' -> Satzanzahl
+      rows.forEach(function(r){if(!r.date)return;byDay[r.date]=(byDay[r.date]||0)+1;});
+      document.getElementById('statTrainings').textContent=Object.keys(byDay).length;
+      document.getElementById('statSets').textContent=rows.length;
+      renderCalendar(byDay);
+    }).catch(function(){renderCalendar({});});
+}
+function renderCalendar(byDay){
+  var grid=document.getElementById('calGrid');grid.innerHTML='';
+  ['Mo','Di','Mi','Do','Fr','Sa','So'].forEach(function(d){
+    var el=document.createElement('div');el.className='dow';el.textContent=d;grid.appendChild(el);
+  });
+  var first=new Date(calYear,calMonth,1);
+  var startDow=(first.getDay()+6)%7; // Montag=0
+  var daysInMonth=new Date(calYear,calMonth+1,0).getDate();
+  for(var i=0;i<startDow;i++){var e=document.createElement('div');e.className='cal-cell empty';grid.appendChild(e);}
+  var today=todayStr();
+  for(var day=1;day<=daysInMonth;day++){
+    var ds=calYear+'-'+pad2(calMonth+1)+'-'+pad2(day);
+    var cell=document.createElement('div');cell.className='cal-cell';
+    cell.textContent=day;
+    if(ds===today)cell.classList.add('today');
+    if(byDay[ds]){
+      cell.classList.add('has');
+      var dot=document.createElement('span');dot.className='dot';dot.textContent=byDay[ds];cell.appendChild(dot);
+      (function(dstr){cell.onclick=function(){openDate(dstr);};})(ds);
+    }
+    grid.appendChild(cell);
+  }
+}
+function shiftMonth(delta){
+  calMonth+=delta;
+  if(calMonth<0){calMonth=11;calYear--;}
+  if(calMonth>11){calMonth=0;calYear++;}
+  loadCalendar();
+}
+function openDate(ds){
+  document.getElementById('date').value=ds;
+  loadEntries();
+  switchTab('log');
+}
+
+/* ---------- Tabs ---------- */
+function switchTab(which){
+  document.getElementById('tab-log').classList.toggle('active',which==='log');
+  document.getElementById('tab-cal').classList.toggle('active',which==='cal');
+  document.getElementById('tab-ana').classList.toggle('active',which==='ana');
+  document.getElementById('tab-set').classList.toggle('active',which==='set');
+  document.getElementById('navLog').classList.toggle('active',which==='log');
+  document.getElementById('navCal').classList.toggle('active',which==='cal');
+  document.getElementById('navAna').classList.toggle('active',which==='ana');
+  document.getElementById('navSet').classList.toggle('active',which==='set');
+  if(which==='cal')loadCalendar();
+  if(which==='ana')loadAnalysis();
+  if(which==='set')loadSettingsTab();
+}
+
+/* ---------- Einstellungen-Tab ---------- */
+// Geräte-Zeile (editierbare Liste)
+function typeRowTemplate(name){
+  var d=document.createElement('div');
+  d.className='typerow';
+  d.innerHTML=
+    '<input type="text" class="t-name" placeholder="Gerätename" value="'+(name||'').replace(/"/g,'&quot;')+'">'+
+    '<button class="del-row" type="button" title="Entfernen">×</button>';
+  d.querySelector('.del-row').onclick=function(){d.remove();};
+  return d;
+}
+// aktuell im Geräte-Editor stehende Namen (live)
+function currentTypeList(){
+  var box=document.getElementById('typeRows');
+  if(!box||!box.children.length) return equipmentTypes.slice();
+  var out=[];
+  for(var i=0;i<box.children.length;i++){
+    var v=box.children[i].querySelector('.t-name').value.trim();
+    if(v&&out.indexOf(v)===-1)out.push(v);
+  }
+  return out;
+}
+function settRowTemplate(equipment,label,weight){
+  var d=document.createElement('div');
+  d.className='settbl-row';
+  var list=currentTypeList();
+  if(equipment && list.indexOf(equipment)===-1) list.push(equipment);
+  var opts=list.map(function(v){
+    return '<option value="'+escapeHtml(v)+'"'+(v===equipment?' selected':'')+'>'+escapeHtml(v)+'</option>';
+  }).join('');
+  d.innerHTML=
+    '<select class="r-equipment">'+opts+'</select>'+
+    '<input type="text" class="r-label" placeholder="z. B. rot" value="'+(label||'').replace(/"/g,'&quot;')+'">'+
+    '<input type="number" class="r-weight" inputmode="decimal" step="0.5" placeholder="kg" value="'+(weight==null?'':weight)+'">'+
+    '<button class="del-row" type="button" title="Entfernen">×</button>';
+  d.querySelector('.del-row').onclick=function(){d.remove();};
+  return d;
+}
+// Beim Öffnen des Tabs frische Daten aus dem Sheet ziehen, dann rendern
+function loadSettingsTab(){
+  var st=document.getElementById('setStatus');
+  st.textContent='Lade…';st.className='status show load';
+  var pending=2;
+  function done(){if(--pending===0){st.className='status';renderSettingsTab();refreshAllSets();}}
+  fetchTypes(done);
+  fetchSettings(done);
+}
+function renderSettingsTab(){
+  // Geräteliste
+  var tbox=document.getElementById('typeRows');tbox.innerHTML='';
+  var list=equipmentTypes.length?equipmentTypes:DEFAULT_EQUIPMENT;
+  list.forEach(function(n){tbox.appendChild(typeRowTemplate(n));});
+  // Varianten
+  var box=document.getElementById('setRows');box.innerHTML='';
+  if(equipSettings.length){
+    equipSettings.forEach(function(e){box.appendChild(settRowTemplate(e.equipment,e.label,e.weight));});
+  }else{
+    box.appendChild(settRowTemplate(list[0]||'','',''));
+  }
+}
+function saveSettingsTab(){
+  var url=getUrl();if(!url){openCfg();return;}
+  var types=currentTypeList();
+  var rows=[];
+  var els=document.getElementById('setRows').children;
+  for(var i=0;i<els.length;i++){
+    var eq=els[i].querySelector('.r-equipment').value;
+    var lab=els[i].querySelector('.r-label').value.trim();
+    var w=els[i].querySelector('.r-weight').value;
+    if(!lab&&w==='')continue;
+    rows.push({equipment:eq,label:lab,weight:w});
+  }
+  var st=document.getElementById('setStatus');
+  st.textContent='Speichere…';st.className='status show load';
+  postJSON(url,{action:'saveTypes',types:types})
+    .then(function(){return postJSON(url,{action:'saveSettings',rows:rows});})
+    .then(function(){
+      equipmentTypes=types;
+      equipSettings=rows.map(function(r){return {equipment:r.equipment,label:r.label,weight:r.weight};});
+      saveEquipCache();
+      refreshAllSets();
+      st.textContent='Gespeichert ✓';st.className='status show ok';
+      setTimeout(function(){st.className='status';},2500);
+    }).catch(function(e){st.textContent='Fehler: '+e.message;st.className='status show err';});
+}
+
+/* ---------- Analyse ---------- */
+var charts={};
+function isoWeekKey(dateStr){
+  // ISO-8601 Wochenschluessel "YYYY-Www"
+  var p=dateStr.split('-');var d=new Date(Date.UTC(+p[0],+p[1]-1,+p[2]));
+  var day=(d.getUTCDay()+6)%7; // Mo=0
+  d.setUTCDate(d.getUTCDate()-day+3); // Donnerstag dieser Woche
+  var firstThu=new Date(Date.UTC(d.getUTCFullYear(),0,4));
+  var week=1+Math.round(((d-firstThu)/86400000-3+((firstThu.getUTCDay()+6)%7))/7);
+  return d.getUTCFullYear()+'-W'+(week<10?'0':'')+week;
+}
+function loadAnalysis(){
+  var url=getUrl();
+  var st=document.getElementById('anaStatus');
+  if(!url){st.textContent='Bitte zuerst die Apps-Script-URL einrichten.';return;}
+  st.style.display='block';st.textContent='Lade…';
+  fetch(url+'?action=read')
+    .then(function(r){return r.json();})
+    .then(function(d){renderAnalysis(d.rows||[]);})
+    .catch(function(e){st.textContent='Fehler beim Laden: '+e.message;});
+}
+function renderAnalysis(rows){
+  var st=document.getElementById('anaStatus');
+  if(!rows.length){st.textContent='Noch keine Daten für Analysen vorhanden.';
+    ['anaWeightCard','anaFreqCard','anaSetsCard'].forEach(function(id){document.getElementById(id).style.display='none';});
+    return;}
+  st.style.display='none';
+  ['anaWeightCard','anaFreqCard','anaSetsCard'].forEach(function(id){document.getElementById(id).style.display='block';});
+
+  // ---- Gewicht je Übung ----
+  var exNames=[];var seen={};
+  rows.forEach(function(r){var n=(r.exercise||'').toString().trim();if(n&&!seen[n.toLowerCase()]){seen[n.toLowerCase()]=true;exNames.push(n);}});
+  exNames.sort();
+  var sel=document.getElementById('anaExercise');
+  var prev=sel.value;
+  sel.innerHTML=exNames.map(function(n){return '<option value="'+escapeHtml(n)+'">'+escapeHtml(n)+'</option>';}).join('');
+  if(prev&&exNames.indexOf(prev)!==-1)sel.value=prev;
+  sel.onchange=function(){drawWeightChart(rows,sel.value);};
+  drawWeightChart(rows,sel.value);
+
+  // ---- pro Woche: Trainingstage & Sätze ----
+  var weekSets={},weekDays={};
+  rows.forEach(function(r){
+    if(!r.date)return;var wk=isoWeekKey(r.date);
+    weekSets[wk]=(weekSets[wk]||0)+1;
+    (weekDays[wk]=weekDays[wk]||{})[r.date]=true;
+  });
+  var weeks=Object.keys(weekSets).sort();
+  var freq=weeks.map(function(w){return Object.keys(weekDays[w]).length;});
+  var setsPerWeek=weeks.map(function(w){return weekSets[w];});
+  drawBar('chartFreq','Trainingstage',weeks,freq);
+  drawBar('chartSets','Sätze',weeks,setsPerWeek);
+}
+function drawWeightChart(rows,exercise){
+  // max. Gewicht je Tag für die gewählte Übung
+  var byDate={};
+  rows.forEach(function(r){
+    if((r.exercise||'').toString().trim().toLowerCase()!==(exercise||'').toLowerCase())return;
+    var w=parseFloat(String(r.weight).replace(',','.'));if(isNaN(w))return;
+    if(byDate[r.date]==null||w>byDate[r.date])byDate[r.date]=w;
+  });
+  var dates=Object.keys(byDate).sort();
+  var vals=dates.map(function(d){return byDate[d];});
+  drawLine('chartWeight','Max. Gewicht',dates,vals);
+}
+var GREEN='#3f6b4f';
+function destroyChart(id){if(charts[id]){charts[id].destroy();delete charts[id];}}
+function drawLine(id,label,labels,data){
+  destroyChart(id);
+  charts[id]=new Chart(document.getElementById(id),{
+    type:'line',
+    data:{labels:labels,datasets:[{label:label,data:data,borderColor:GREEN,backgroundColor:'rgba(63,107,79,.15)',
+      tension:.25,fill:true,pointRadius:3,pointBackgroundColor:GREEN}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{y:{beginAtZero:false}}}
+  });
+}
+function drawBar(id,label,labels,data){
+  destroyChart(id);
+  charts[id]=new Chart(document.getElementById(id),{
+    type:'bar',
+    data:{labels:labels,datasets:[{label:label,data:data,backgroundColor:GREEN,borderRadius:6}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{y:{beginAtZero:true,ticks:{precision:0}}}}
+  });
+}
+
+/* ---------- HTTP ---------- */
+function postJSON(url,obj){
+  return fetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(obj)})
+    .then(function(r){return r.json();})
+    .then(function(d){if(d&&d.error){throw new Error(d.error);}return d;});
+}
+function escapeHtml(s){return (s==null?'':String(s)).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+
+/* ---------- Config Modal ---------- */
+function openCfg(){document.getElementById('cfgUrl').value=getUrl();document.getElementById('cfgBg').classList.add('show');}
+function closeCfg(){document.getElementById('cfgBg').classList.remove('show');}
+
+/* ---------- Init ---------- */
+function todayStr(){var d=new Date();var off=d.getTimezoneOffset();d=new Date(d.getTime()-off*60000);return d.toISOString().slice(0,10);}
+document.addEventListener('DOMContentLoaded',function(){
+  document.getElementById('date').value=todayStr();
+  var now=new Date();calYear=now.getFullYear();calMonth=now.getMonth();
+  loadEquipCache(); // gespeicherten Stand der Geräte/Varianten sofort verfügbar machen
+  addSet();
+  renderExDatalist();
+  document.getElementById('addSet').onclick=addSet;
+  document.getElementById('save').onclick=save;
+  document.getElementById('date').onchange=loadEntries;
+  document.getElementById('m_save').onclick=saveEdit;
+  document.getElementById('m_delete').onclick=deleteEdit;
+  document.getElementById('m_cancel').onclick=closeEdit;
+  document.getElementById('modalBg').onclick=function(e){if(e.target.id==='modalBg')closeEdit();};
+  document.getElementById('cfgSave').onclick=function(){
+    var u=document.getElementById('cfgUrl').value.trim();
+    if(u){setUrl(u);closeCfg();loadEntries();fetchExercises();status('URL gespeichert ✓','ok');}
+  };
+  document.getElementById('cfgBg').onclick=function(e){if(e.target.id==='cfgBg')closeCfg();};
+  document.querySelector('header').addEventListener('dblclick',openCfg);
+  document.getElementById('navLog').onclick=function(){switchTab('log');};
+  document.getElementById('navCal').onclick=function(){switchTab('cal');};
+  document.getElementById('navAna').onclick=function(){switchTab('ana');};
+  document.getElementById('navSet').onclick=function(){switchTab('set');};
+  document.getElementById('calPrev').onclick=function(){shiftMonth(-1);};
+  document.getElementById('calNext').onclick=function(){shiftMonth(1);};
+  document.getElementById('setAddRow').onclick=function(){
+    document.getElementById('setRows').appendChild(settRowTemplate(currentTypeList()[0]||'','',''));
+  };
+  document.getElementById('typeAddRow').onclick=function(){
+    document.getElementById('typeRows').appendChild(typeRowTemplate(''));
+  };
+  document.getElementById('setSave').onclick=saveSettingsTab;
+  refreshAllSets(); // Varianten-Felder mit dem lokalen Cache befüllen
+  if(!getUrl()){openCfg();}else{loadEntries();fetchExercises();}
+});
+
+/* ============================================================
+   PWA: Manifest (inline) + Service Worker (inline via Blob)
+   ============================================================ */
+(function(){
+  var icon="data:image/svg+xml,"+encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512"><rect width="512" height="512" rx="96" fill="#3f6b4f"/><g fill="#e9ecea"><rect x="86" y="226" width="40" height="60" rx="8"/><rect x="386" y="226" width="40" height="60" rx="8"/><rect x="126" y="196" width="44" height="120" rx="10"/><rect x="342" y="196" width="44" height="120" rx="10"/><rect x="170" y="240" width="172" height="32" rx="10"/></g></svg>');
+  var manifest={
+    name:"Gym Tracker",short_name:"Gym",start_url:".",scope:".",
+    display:"standalone",background_color:"#e9ecea",theme_color:"#3f6b4f",
+    icons:[{src:icon,sizes:"512x512",type:"image/svg+xml",purpose:"any maskable"}]
+  };
+  var mlink=document.createElement('link');mlink.rel='manifest';
+  mlink.href=URL.createObjectURL(new Blob([JSON.stringify(manifest)],{type:'application/manifest+json'}));
+  document.head.appendChild(mlink);
+
+  if('serviceWorker' in navigator){
+    var sw="self.addEventListener('install',function(e){self.skipWaiting();});"+
+           "self.addEventListener('activate',function(e){e.waitUntil(self.clients.claim());});"+
+           "self.addEventListener('fetch',function(e){"+
+           " e.respondWith(fetch(e.request).catch(function(){return caches.match(e.request);}));"+
+           "});";
+    try{
+      var swUrl=URL.createObjectURL(new Blob([sw],{type:'text/javascript'}));
+      navigator.serviceWorker.register(swUrl).catch(function(){});
+    }catch(e){}
+  }
+})();
+</script>
+</body>
+</html>
