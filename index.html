@@ -161,6 +161,9 @@
   .settbl-row{margin-bottom:8px;}
   .settbl-row select,.settbl-row input{padding:10px;font-size:14px;}
   .settbl-row .del-row{background:none;border:none;color:var(--danger);font-size:20px;font-weight:700;padding:0;}
+  .typerow{display:grid;grid-template-columns:1fr 32px;gap:6px;align-items:center;margin-bottom:8px;}
+  .typerow input{padding:10px;font-size:14px;}
+  .typerow .del-row{background:none;border:none;color:var(--danger);font-size:20px;font-weight:700;padding:0;}
 </style>
 </head>
 <body>
@@ -245,17 +248,25 @@
 <div class="wrap">
   <div id="setStatus" class="status"></div>
   <div class="card">
-    <div class="section-title">Geräte / Varianten</div>
+    <div class="section-title">Varianten</div>
     <p style="font-size:13px;color:var(--muted);margin:0 0 12px;line-height:1.4;">
-      Hinterlege je Variante eine Bezeichnung (z. B. Farbe) und das Gewicht. Im Erfassen-Tab wird das Gewicht dann automatisch übernommen, wenn du die Variante wählst.
+      Hinterlege je Variante eine Bezeichnung (z. B. Farbe) und das Gewicht. Im Erfassen-Tab erscheint dann bei diesem Gerät ein Varianten-Dropdown und das Gewicht wird automatisch übernommen.
     </p>
     <div class="settbl-head">
       <div>Gerät</div><div>Bezeichnung</div><div>Gewicht</div><div></div>
     </div>
     <div id="setRows"></div>
     <button class="btn add" id="setAddRow">+ Zeile hinzufügen</button>
-    <button class="btn" id="setSave" style="margin-top:12px;">Speichern</button>
   </div>
+  <div class="card">
+    <div class="section-title">Geräte</div>
+    <p style="font-size:13px;color:var(--muted);margin:0 0 12px;line-height:1.4;">
+      Lege fest, welche Geräte in den Dropdowns zur Auswahl stehen.
+    </p>
+    <div id="typeRows"></div>
+    <button class="btn add" id="typeAddRow">+ Gerät hinzufügen</button>
+  </div>
+  <button class="btn" id="setSave">Alles speichern</button>
 </div>
 </div>
 
@@ -317,16 +328,16 @@
    Trage hier deine Apps-Script-URL ein, oder lass sie leer
    und gib sie beim ersten Start in der App ein.
    ============================================================ */
-var SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzJC7nsN1lFvtv_VRyfM42OuFMuyYOw3CPikyF5fRNFn7DLHJlRuvg-4tFWj7gdciQ8bg/exec"; // <-- HIER deine /exec URL eintragen (optional)
+var SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxAk6sTtkmtgpjukxgmQkmJnZr52nETo8jxsPI27mCdHxN0Am0Yq7iG8wZZpq72QXDHGg/exec"; // <-- HIER deine /exec URL eintragen (optional)
 
-var EQUIPMENT = ["", "Machine","Resistance Band","Loop Band","Tube","Thera Loop","Body Weight","Kettlebell","TRX","Dumbbell","Barbell"];
-// Geräte, für die eine Variante (aus den Einstellungen) gewählt werden kann
-var VARIANT_TYPES = ["Resistance Band","Loop Band","Tube","Thera Loop"];
+// Standard-Geräte (Seed) – im Einstellungen-Tab editierbar, dann im Sheet gespeichert
+var DEFAULT_EQUIPMENT = ["Machine","Resistance Band","Loop Band","Tube","Thera Loop","Body Weight","Kettlebell","TRX","Dumbbell","Barbell"];
 
 /* ---------- State ---------- */
 var STORE_URL = "gymtracker_url";
 var STORE_EX  = "gymtracker_exercises";
 var calYear, calMonth; // calMonth 0-basiert
+var equipmentTypes = DEFAULT_EQUIPMENT.slice(); // editierbare Geräteliste
 var equipSettings = []; // [{equipment,label,weight}] aus dem Einstellungen-Tab
 
 function getUrl(){ return SCRIPT_URL || localStorage.getItem(STORE_URL) || ""; }
@@ -341,12 +352,14 @@ function status(msg,type){
 
 /* ---------- Equipment-Dropdown ---------- */
 function equipmentOptions(selected){
-  return EQUIPMENT.map(function(v){
-    var lab=v===""?"– Gerät –":v;
-    return '<option value="'+v+'"'+(v===selected?' selected':'')+'>'+lab+'</option>';
+  var list=[""].concat(equipmentTypes.slice());
+  // ausgewähltes, aber (noch) nicht gelistetes Gerät ergänzen
+  if(selected && list.indexOf(selected)===-1) list.push(selected);
+  return list.map(function(v){
+    var lab=v===""?"– Gerät –":escapeHtml(v);
+    return '<option value="'+escapeHtml(v)+'"'+(v===selected?' selected':'')+'>'+lab+'</option>';
   }).join('');
 }
-function isVariantType(eq){return VARIANT_TYPES.indexOf(eq)!==-1;}
 // Varianten (Bezeichnungen aus Spalte 2) für ein Gerät
 function variantsFor(equipment){
   return equipSettings.filter(function(e){return e.equipment===equipment;})
@@ -373,7 +386,7 @@ function refreshVariant(scope,prefix,preselect){
   var eq=scope.querySelector('.'+prefix+'equipment').value;
   var field=scope.querySelector('.'+prefix+'variant-field');
   var sel=scope.querySelector('.'+prefix+'variant');
-  if(isVariantType(eq)){
+  if(variantsFor(eq).length>0){
     sel.innerHTML=variantOptions(eq,preselect||"");
     field.style.display='';
   }else{
@@ -456,12 +469,24 @@ function fetchExercises(){
       }
     }).catch(function(){});
 }
-// Equipment-Einstellungen vom Sheet laden
+// Equipment-Einstellungen (Varianten) vom Sheet laden
 function fetchSettings(cb){
   var url=getUrl();if(!url){if(cb)cb();return;}
   fetch(url+'?action=settings')
     .then(function(r){return r.json();})
     .then(function(d){equipSettings=(d&&d.settings)||[];if(cb)cb();})
+    .catch(function(){if(cb)cb();});
+}
+// Geräteliste vom Sheet laden (Fallback: Standardliste)
+function fetchTypes(cb){
+  var url=getUrl();if(!url){if(cb)cb();return;}
+  fetch(url+'?action=types')
+    .then(function(r){return r.json();})
+    .then(function(d){
+      var t=(d&&d.types)||[];
+      if(t.length)equipmentTypes=t;
+      if(cb)cb();
+    })
     .catch(function(){if(cb)cb();});
 }
 
@@ -688,12 +713,34 @@ function switchTab(which){
 }
 
 /* ---------- Einstellungen-Tab ---------- */
+// Geräte-Zeile (editierbare Liste)
+function typeRowTemplate(name){
+  var d=document.createElement('div');
+  d.className='typerow';
+  d.innerHTML=
+    '<input type="text" class="t-name" placeholder="Gerätename" value="'+(name||'').replace(/"/g,'&quot;')+'">'+
+    '<button class="del-row" type="button" title="Entfernen">×</button>';
+  d.querySelector('.del-row').onclick=function(){d.remove();};
+  return d;
+}
+// aktuell im Geräte-Editor stehende Namen (live)
+function currentTypeList(){
+  var box=document.getElementById('typeRows');
+  if(!box||!box.children.length) return equipmentTypes.slice();
+  var out=[];
+  for(var i=0;i<box.children.length;i++){
+    var v=box.children[i].querySelector('.t-name').value.trim();
+    if(v&&out.indexOf(v)===-1)out.push(v);
+  }
+  return out;
+}
 function settRowTemplate(equipment,label,weight){
   var d=document.createElement('div');
   d.className='settbl-row';
-  // Gerät-Dropdown ohne Leeroption
-  var opts=EQUIPMENT.filter(function(v){return v!=="";}).map(function(v){
-    return '<option value="'+v+'"'+(v===equipment?' selected':'')+'>'+v+'</option>';
+  var list=currentTypeList();
+  if(equipment && list.indexOf(equipment)===-1) list.push(equipment);
+  var opts=list.map(function(v){
+    return '<option value="'+escapeHtml(v)+'"'+(v===equipment?' selected':'')+'>'+escapeHtml(v)+'</option>';
   }).join('');
   d.innerHTML=
     '<select class="r-equipment">'+opts+'</select>'+
@@ -704,15 +751,21 @@ function settRowTemplate(equipment,label,weight){
   return d;
 }
 function loadSettingsTab(){
+  // Geräteliste
+  var tbox=document.getElementById('typeRows');tbox.innerHTML='';
+  var list=equipmentTypes.length?equipmentTypes:DEFAULT_EQUIPMENT;
+  list.forEach(function(n){tbox.appendChild(typeRowTemplate(n));});
+  // Varianten
   var box=document.getElementById('setRows');box.innerHTML='';
   if(equipSettings.length){
     equipSettings.forEach(function(e){box.appendChild(settRowTemplate(e.equipment,e.label,e.weight));});
   }else{
-    box.appendChild(settRowTemplate(VARIANT_TYPES[0],'',''));
+    box.appendChild(settRowTemplate(list[0]||'','',''));
   }
 }
 function saveSettingsTab(){
   var url=getUrl();if(!url){openCfg();return;}
+  var types=currentTypeList();
   var rows=[];
   var els=document.getElementById('setRows').children;
   for(var i=0;i<els.length;i++){
@@ -724,11 +777,14 @@ function saveSettingsTab(){
   }
   var st=document.getElementById('setStatus');
   st.textContent='Speichere…';st.className='status show load';
-  postJSON(url,{action:'saveSettings',rows:rows}).then(function(){
-    equipSettings=rows.map(function(r){return {equipment:r.equipment,label:r.label,weight:r.weight};});
-    st.textContent='Gespeichert ✓';st.className='status show ok';
-    setTimeout(function(){st.className='status';},2500);
-  }).catch(function(e){st.textContent='Fehler: '+e.message;st.className='status show err';});
+  postJSON(url,{action:'saveTypes',types:types})
+    .then(function(){return postJSON(url,{action:'saveSettings',rows:rows});})
+    .then(function(){
+      equipmentTypes=types;
+      equipSettings=rows.map(function(r){return {equipment:r.equipment,label:r.label,weight:r.weight};});
+      st.textContent='Gespeichert ✓';st.className='status show ok';
+      setTimeout(function(){st.className='status';},2500);
+    }).catch(function(e){st.textContent='Fehler: '+e.message;st.className='status show err';});
 }
 
 /* ---------- Analyse ---------- */
@@ -846,7 +902,7 @@ document.addEventListener('DOMContentLoaded',function(){
   document.getElementById('modalBg').onclick=function(e){if(e.target.id==='modalBg')closeEdit();};
   document.getElementById('cfgSave').onclick=function(){
     var u=document.getElementById('cfgUrl').value.trim();
-    if(u){setUrl(u);closeCfg();loadEntries();fetchExercises();fetchSettings();status('URL gespeichert ✓','ok');}
+    if(u){setUrl(u);closeCfg();loadEntries();fetchExercises();fetchSettings();fetchTypes();status('URL gespeichert ✓','ok');}
   };
   document.getElementById('cfgBg').onclick=function(e){if(e.target.id==='cfgBg')closeCfg();};
   document.querySelector('header').addEventListener('dblclick',openCfg);
@@ -857,10 +913,13 @@ document.addEventListener('DOMContentLoaded',function(){
   document.getElementById('calPrev').onclick=function(){shiftMonth(-1);};
   document.getElementById('calNext').onclick=function(){shiftMonth(1);};
   document.getElementById('setAddRow').onclick=function(){
-    document.getElementById('setRows').appendChild(settRowTemplate(VARIANT_TYPES[0],'',''));
+    document.getElementById('setRows').appendChild(settRowTemplate(currentTypeList()[0]||'','',''));
+  };
+  document.getElementById('typeAddRow').onclick=function(){
+    document.getElementById('typeRows').appendChild(typeRowTemplate(''));
   };
   document.getElementById('setSave').onclick=saveSettingsTab;
-  if(!getUrl()){openCfg();}else{loadEntries();fetchExercises();fetchSettings();}
+  if(!getUrl()){openCfg();}else{loadEntries();fetchExercises();fetchSettings();fetchTypes();}
 });
 
 /* ============================================================
