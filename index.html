@@ -154,12 +154,19 @@
 
   /* Analyse */
   .chart-wrap{position:relative;height:240px;margin-top:6px;}
+
+  /* Einstellungen-Tabelle */
+  .settbl-head,.settbl-row{display:grid;grid-template-columns:1.3fr 1.1fr .8fr 32px;gap:6px;align-items:center;}
+  .settbl-head{font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px;padding:0 2px;}
+  .settbl-row{margin-bottom:8px;}
+  .settbl-row select,.settbl-row input{padding:10px;font-size:14px;}
+  .settbl-row .del-row{background:none;border:none;color:var(--danger);font-size:20px;font-weight:700;padding:0;}
 </style>
 </head>
 <body>
 <header>
   <h1>Gym Tracker</h1>
-  <div class="sub">Sebastian</div>
+  <div class="sub">Training protokollieren</div>
 </header>
 
 <!-- ===== TAB: ERFASSEN ===== -->
@@ -233,6 +240,25 @@
 </div>
 </div>
 
+<!-- ===== TAB: EINSTELLUNGEN ===== -->
+<div class="tab" id="tab-set">
+<div class="wrap">
+  <div id="setStatus" class="status"></div>
+  <div class="card">
+    <div class="section-title">Geräte / Varianten</div>
+    <p style="font-size:13px;color:var(--muted);margin:0 0 12px;line-height:1.4;">
+      Hinterlege je Variante eine Bezeichnung (z. B. Farbe) und das Gewicht. Im Erfassen-Tab wird das Gewicht dann automatisch übernommen, wenn du die Variante wählst.
+    </p>
+    <div class="settbl-head">
+      <div>Gerät</div><div>Bezeichnung</div><div>Gewicht</div><div></div>
+    </div>
+    <div id="setRows"></div>
+    <button class="btn add" id="setAddRow">+ Zeile hinzufügen</button>
+    <button class="btn" id="setSave" style="margin-top:12px;">Speichern</button>
+  </div>
+</div>
+</div>
+
 <!-- Bearbeiten Modal -->
 <div class="modal-bg" id="modalBg">
   <div class="modal">
@@ -241,20 +267,23 @@
       <label>Übung</label>
       <input type="text" id="m_exercise" list="exerciseList" />
     </div>
+    <div class="field"><label>Gerät</label>
+      <select class="m-equipment" id="m_equipment"></select>
+    </div>
+    <div class="field m-variant-field" style="display:none;"><label>Variante</label>
+      <select class="m-variant" id="m_variant"></select>
+    </div>
     <div class="row">
       <div class="field"><label>Satz-Nr.</label><input type="number" id="m_setno" inputmode="numeric" /></div>
       <div class="field"><label>Reps</label><input type="number" id="m_reps" inputmode="numeric" /></div>
     </div>
     <div class="row">
-      <div class="field"><label>Gewicht</label><input type="number" id="m_weight" inputmode="decimal" step="0.5" /></div>
+      <div class="field"><label>Gewicht</label><input type="number" class="m-weight" id="m_weight" inputmode="decimal" step="0.5" /></div>
       <div class="field"><label>Einheit</label>
         <select id="m_unit"><option value="kg">kg</option><option value="lbs">lbs</option></select>
       </div>
     </div>
-    <div class="field"><label>Gerät</label>
-      <select id="m_equipment"></select>
-    </div>
-    <div class="field"><label>Kommentar</label><input type="text" id="m_comment" /></div>
+    <div class="field"><label>Kommentar</label><input type="text" class="m-comment" id="m_comment" /></div>
     <button class="btn" id="m_save">Änderungen speichern</button>
     <button class="btn danger" id="m_delete" style="margin-top:10px;">Löschen</button>
     <button class="btn secondary" id="m_cancel" style="margin-top:10px;">Abbrechen</button>
@@ -279,6 +308,7 @@
   <button id="navLog" class="active"><span class="ic">📝</span>Erfassen</button>
   <button id="navCal"><span class="ic">📅</span>Kalender</button>
   <button id="navAna"><span class="ic">📊</span>Analyse</button>
+  <button id="navSet"><span class="ic">⚙️</span>Einstellungen</button>
 </nav>
 
 <script>
@@ -289,12 +319,15 @@
    ============================================================ */
 var SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxAk6sTtkmtgpjukxgmQkmJnZr52nETo8jxsPI27mCdHxN0Am0Yq7iG8wZZpq72QXDHGg/exec"; // <-- HIER deine /exec URL eintragen (optional)
 
-var EQUIPMENT = ["", "Machine","Resistance Band","Loop Band","Body Weight","Kettlebell","TRX","Dumbbell","Barbell"];
+var EQUIPMENT = ["", "Machine","Resistance Band","Loop Band","Tube","Thera Loop","Body Weight","Kettlebell","TRX","Dumbbell","Barbell"];
+// Geräte, für die eine Variante (aus den Einstellungen) gewählt werden kann
+var VARIANT_TYPES = ["Resistance Band","Loop Band","Tube","Thera Loop"];
 
 /* ---------- State ---------- */
 var STORE_URL = "gymtracker_url";
 var STORE_EX  = "gymtracker_exercises";
 var calYear, calMonth; // calMonth 0-basiert
+var equipSettings = []; // [{equipment,label,weight}] aus dem Einstellungen-Tab
 
 function getUrl(){ return SCRIPT_URL || localStorage.getItem(STORE_URL) || ""; }
 function setUrl(u){ localStorage.setItem(STORE_URL,u); }
@@ -313,22 +346,66 @@ function equipmentOptions(selected){
     return '<option value="'+v+'"'+(v===selected?' selected':'')+'>'+lab+'</option>';
   }).join('');
 }
+function isVariantType(eq){return VARIANT_TYPES.indexOf(eq)!==-1;}
+// Varianten (Bezeichnungen aus Spalte 2) für ein Gerät
+function variantsFor(equipment){
+  return equipSettings.filter(function(e){return e.equipment===equipment;})
+                      .map(function(e){return e.label;})
+                      .filter(function(l){return l;});
+}
+function variantOptions(equipment,selected){
+  var opts='<option value="">– Variante –</option>';
+  variantsFor(equipment).forEach(function(l){
+    opts+='<option value="'+escapeHtml(l)+'"'+(l===selected?' selected':'')+'>'+escapeHtml(l)+'</option>';
+  });
+  return opts;
+}
+function weightFor(equipment,label){
+  for(var i=0;i<equipSettings.length;i++){
+    if(equipSettings[i].equipment===equipment && equipSettings[i].label===label) return equipSettings[i].weight;
+  }
+  return null;
+}
 
 /* ---------- Sätze (Eingabe) ---------- */
-function setTemplate(n,reps,weight,unit,equipment,comment){
+// Varianten-Feld eines Satzes/Modals auf Basis des gewählten Geräts aktualisieren
+function refreshVariant(scope,prefix,preselect){
+  var eq=scope.querySelector('.'+prefix+'equipment').value;
+  var field=scope.querySelector('.'+prefix+'variant-field');
+  var sel=scope.querySelector('.'+prefix+'variant');
+  if(isVariantType(eq)){
+    sel.innerHTML=variantOptions(eq,preselect||"");
+    field.style.display='';
+  }else{
+    sel.innerHTML='';field.style.display='none';
+  }
+}
+function applyVariant(scope,prefix){
+  var eq=scope.querySelector('.'+prefix+'equipment').value;
+  var label=scope.querySelector('.'+prefix+'variant').value;
+  if(!label)return;
+  var w=weightFor(eq,label);
+  if(w!==null&&w!==''&&w!==undefined) scope.querySelector('.'+prefix+'weight').value=w;
+  scope.querySelector('.'+prefix+'comment').value=label; // Auswahl ins Kommentarfeld
+}
+function setTemplate(n,reps,weight,unit,equipment,comment,variant){
   var d=document.createElement('div');
   d.className='set';
   d.innerHTML=
     '<div class="set-head"><b>Satz '+n+'</b><button class="del-set" type="button">Entfernen</button></div>'+
+    '<div class="field" style="margin-bottom:8px;"><label>Gerät</label><select class="s-equipment">'+equipmentOptions(equipment||"")+'</select></div>'+
+    '<div class="field s-variant-field" style="margin-bottom:8px;display:none;"><label>Variante</label><select class="s-variant"></select></div>'+
     '<div class="row">'+
       '<div class="field" style="margin-bottom:8px;"><label>Reps</label><input type="number" class="s-reps" inputmode="numeric" value="'+(reps||'')+'"></div>'+
       '<div class="field" style="margin-bottom:8px;"><label>Gewicht</label><input type="number" class="s-weight" inputmode="decimal" step="0.5" value="'+(weight||'')+'"></div>'+
       '<div class="field" style="margin-bottom:8px;max-width:90px;"><label>Einheit</label><select class="s-unit"><option value="kg">kg</option><option value="lbs">lbs</option></select></div>'+
     '</div>'+
-    '<div class="field" style="margin-bottom:8px;"><label>Gerät</label><select class="s-equipment">'+equipmentOptions(equipment||"")+'</select></div>'+
     '<div class="field" style="margin-bottom:0;"><label>Kommentar</label><input type="text" class="s-comment" placeholder="optional" value="'+(comment||'').replace(/"/g,'&quot;')+'"></div>';
   if(unit==='lbs') d.querySelector('.s-unit').value='lbs';
   d.querySelector('.del-set').onclick=function(){d.remove();renumberSets();};
+  d.querySelector('.s-equipment').onchange=function(){refreshVariant(d,'s-');};
+  d.querySelector('.s-variant').onchange=function(){applyVariant(d,'s-');};
+  refreshVariant(d,'s-',variant||"");
   return d;
 }
 function addSet(){
@@ -336,13 +413,14 @@ function addSet(){
   var n=sets.children.length+1;
   var prev=sets.children[sets.children.length-1];
   if(prev){
-    // Werte vom vorherigen Satz übernehmen
+    // Werte vom vorherigen Satz übernehmen (inkl. Variante)
     sets.appendChild(setTemplate(n,
       prev.querySelector('.s-reps').value,
       prev.querySelector('.s-weight').value,
       prev.querySelector('.s-unit').value,
       prev.querySelector('.s-equipment').value,
-      prev.querySelector('.s-comment').value));
+      prev.querySelector('.s-comment').value,
+      prev.querySelector('.s-variant')?prev.querySelector('.s-variant').value:""));
   }else{
     sets.appendChild(setTemplate(n));
   }
@@ -377,6 +455,14 @@ function fetchExercises(){
         merged.sort();writeLocalEx(merged);renderExDatalist();
       }
     }).catch(function(){});
+}
+// Equipment-Einstellungen vom Sheet laden
+function fetchSettings(cb){
+  var url=getUrl();if(!url){if(cb)cb();return;}
+  fetch(url+'?action=settings')
+    .then(function(r){return r.json();})
+    .then(function(d){equipSettings=(d&&d.settings)||[];if(cb)cb();})
+    .catch(function(){if(cb)cb();});
 }
 
 /* ---------- Speichern (POST) ---------- */
@@ -478,6 +564,7 @@ function renderEntries(){
 var editing=null;
 function openEdit(r){
   editing=r;
+  var modal=document.getElementById('modalBg');
   document.getElementById('m_exercise').value=r.exercise;
   document.getElementById('m_setno').value=r.setNo;
   document.getElementById('m_reps').value=r.reps;
@@ -485,7 +572,12 @@ function openEdit(r){
   document.getElementById('m_unit').value=r.unit==='lbs'?'lbs':'kg';
   document.getElementById('m_equipment').innerHTML=equipmentOptions(r.equipment||"");
   document.getElementById('m_comment').value=r.comment||'';
-  document.getElementById('modalBg').classList.add('show');
+  // Variante: vorbelegen, falls Kommentar einer bekannten Bezeichnung entspricht
+  var pre=variantsFor(r.equipment||"").indexOf(r.comment||"")!==-1?r.comment:"";
+  refreshVariant(modal,'m-',pre);
+  document.getElementById('m_equipment').onchange=function(){refreshVariant(modal,'m-');};
+  document.getElementById('m_variant').onchange=function(){applyVariant(modal,'m-');};
+  modal.classList.add('show');
 }
 function closeEdit(){document.getElementById('modalBg').classList.remove('show');editing=null;}
 function saveEdit(){
@@ -585,11 +677,58 @@ function switchTab(which){
   document.getElementById('tab-log').classList.toggle('active',which==='log');
   document.getElementById('tab-cal').classList.toggle('active',which==='cal');
   document.getElementById('tab-ana').classList.toggle('active',which==='ana');
+  document.getElementById('tab-set').classList.toggle('active',which==='set');
   document.getElementById('navLog').classList.toggle('active',which==='log');
   document.getElementById('navCal').classList.toggle('active',which==='cal');
   document.getElementById('navAna').classList.toggle('active',which==='ana');
+  document.getElementById('navSet').classList.toggle('active',which==='set');
   if(which==='cal')loadCalendar();
   if(which==='ana')loadAnalysis();
+  if(which==='set')loadSettingsTab();
+}
+
+/* ---------- Einstellungen-Tab ---------- */
+function settRowTemplate(equipment,label,weight){
+  var d=document.createElement('div');
+  d.className='settbl-row';
+  // Gerät-Dropdown ohne Leeroption
+  var opts=EQUIPMENT.filter(function(v){return v!=="";}).map(function(v){
+    return '<option value="'+v+'"'+(v===equipment?' selected':'')+'>'+v+'</option>';
+  }).join('');
+  d.innerHTML=
+    '<select class="r-equipment">'+opts+'</select>'+
+    '<input type="text" class="r-label" placeholder="z. B. rot" value="'+(label||'').replace(/"/g,'&quot;')+'">'+
+    '<input type="number" class="r-weight" inputmode="decimal" step="0.5" placeholder="kg" value="'+(weight==null?'':weight)+'">'+
+    '<button class="del-row" type="button" title="Entfernen">×</button>';
+  d.querySelector('.del-row').onclick=function(){d.remove();};
+  return d;
+}
+function loadSettingsTab(){
+  var box=document.getElementById('setRows');box.innerHTML='';
+  if(equipSettings.length){
+    equipSettings.forEach(function(e){box.appendChild(settRowTemplate(e.equipment,e.label,e.weight));});
+  }else{
+    box.appendChild(settRowTemplate(VARIANT_TYPES[0],'',''));
+  }
+}
+function saveSettingsTab(){
+  var url=getUrl();if(!url){openCfg();return;}
+  var rows=[];
+  var els=document.getElementById('setRows').children;
+  for(var i=0;i<els.length;i++){
+    var eq=els[i].querySelector('.r-equipment').value;
+    var lab=els[i].querySelector('.r-label').value.trim();
+    var w=els[i].querySelector('.r-weight').value;
+    if(!lab&&w==='')continue;
+    rows.push({equipment:eq,label:lab,weight:w});
+  }
+  var st=document.getElementById('setStatus');
+  st.textContent='Speichere…';st.className='status show load';
+  postJSON(url,{action:'saveSettings',rows:rows}).then(function(){
+    equipSettings=rows.map(function(r){return {equipment:r.equipment,label:r.label,weight:r.weight};});
+    st.textContent='Gespeichert ✓';st.className='status show ok';
+    setTimeout(function(){st.className='status';},2500);
+  }).catch(function(e){st.textContent='Fehler: '+e.message;st.className='status show err';});
 }
 
 /* ---------- Analyse ---------- */
@@ -707,16 +846,21 @@ document.addEventListener('DOMContentLoaded',function(){
   document.getElementById('modalBg').onclick=function(e){if(e.target.id==='modalBg')closeEdit();};
   document.getElementById('cfgSave').onclick=function(){
     var u=document.getElementById('cfgUrl').value.trim();
-    if(u){setUrl(u);closeCfg();loadEntries();fetchExercises();status('URL gespeichert ✓','ok');}
+    if(u){setUrl(u);closeCfg();loadEntries();fetchExercises();fetchSettings();status('URL gespeichert ✓','ok');}
   };
   document.getElementById('cfgBg').onclick=function(e){if(e.target.id==='cfgBg')closeCfg();};
   document.querySelector('header').addEventListener('dblclick',openCfg);
   document.getElementById('navLog').onclick=function(){switchTab('log');};
   document.getElementById('navCal').onclick=function(){switchTab('cal');};
   document.getElementById('navAna').onclick=function(){switchTab('ana');};
+  document.getElementById('navSet').onclick=function(){switchTab('set');};
   document.getElementById('calPrev').onclick=function(){shiftMonth(-1);};
   document.getElementById('calNext').onclick=function(){shiftMonth(1);};
-  if(!getUrl()){openCfg();}else{loadEntries();fetchExercises();}
+  document.getElementById('setAddRow').onclick=function(){
+    document.getElementById('setRows').appendChild(settRowTemplate(VARIANT_TYPES[0],'',''));
+  };
+  document.getElementById('setSave').onclick=saveSettingsTab;
+  if(!getUrl()){openCfg();}else{loadEntries();fetchExercises();fetchSettings();}
 });
 
 /* ============================================================
