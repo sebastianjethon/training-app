@@ -176,6 +176,16 @@
   .personrow{display:grid;grid-template-columns:1fr 1.4fr 32px;gap:6px;align-items:center;margin-bottom:8px;}
   .personrow input{padding:10px;font-size:14px;}
   .personrow .del-row{background:none;border:none;color:var(--danger);font-size:20px;font-weight:700;padding:0;}
+  .pendrow{display:flex;justify-content:space-between;align-items:center;gap:8px;background:#fff;border:1px solid var(--border);border-radius:10px;padding:8px 10px;margin-top:8px;font-size:13px;}
+  .pendrow .del-row{background:none;border:none;color:var(--danger);font-size:18px;font-weight:700;padding:0 4px;}
+  .planadmin{background:#fff;border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:10px;}
+  .planadmin .pa-meta{font-size:13px;color:var(--muted);margin-top:3px;}
+  .planadmin .pa-expl{font-size:12px;color:var(--muted);margin-top:6px;white-space:pre-wrap;}
+  .planadmin .pa-actions{display:flex;gap:8px;margin-top:10px;}
+  .planadmin .pa-actions button{flex:1;padding:9px 0;font-size:13px;border-radius:9px;border:none;font-weight:600;}
+  .pa-edit{background:var(--green-light);color:var(--green-dark);}
+  .pa-del{background:#f5d9d3;color:var(--danger);}
+  .pa-log{background:var(--green);color:#fff;}
 </style>
 </head>
 <body>
@@ -301,14 +311,24 @@
 
     <div class="section-title">Workout planen</div>
     <div class="field"><label>Person</label><select id="pl_person"></select></div>
+    <div id="plStatus" class="status"></div>
+    <div class="field"><label>Datum</label><input type="date" id="pl_date"></div>
     <div class="field"><label>Übung</label><input type="text" id="pl_exercise" list="exerciseList" placeholder="z. B. Bankdrücken"></div>
     <div class="field"><label>Gerät</label><select id="pl_equipment"></select></div>
+    <div class="field" id="pl_variantField" style="display:none;"><label>Variante</label><select id="pl_variant"></select></div>
     <div class="row">
       <div class="field"><label>Sätze</label><input type="number" id="pl_sets" inputmode="numeric" value="3"></div>
       <div class="field"><label>Reps</label><input type="number" id="pl_reps" inputmode="numeric" value="10"></div>
     </div>
     <div class="field"><label>Erklärung (optional)</label><textarea id="pl_expl" rows="3" placeholder="Ausführung, Hinweise …"></textarea></div>
-    <button class="btn" id="pl_send">Plan senden</button>
+    <button class="btn add" id="pl_add">+ zur Liste hinzufügen</button>
+
+    <div id="pl_pending"></div>
+    <button class="btn" id="pl_sendAll" style="margin-top:8px;">Alle senden</button>
+
+    <div style="height:1px;background:var(--border);margin:16px 0;"></div>
+    <div class="section-title">Offene Pläne der Person</div>
+    <div id="pl_open"><div class="empty">Person wählen…</div></div>
   </div>
 </div>
 </div>
@@ -838,10 +858,11 @@ function renderPlanned(lwMap){
     var lw=lastWeightFor(lwMap,p.exercise,p.equipment);
     var lwTxt=lw?('Zuletzt: '+escapeHtml(lw.weight)+' '+escapeHtml(lw.unit||'')):'Noch kein Verlauf';
     var equip=p.equipment?(' · '+escapeHtml(p.equipment)):'';
+    var vv=p.variant?(' · '+escapeHtml(p.variant)):'';
     var expl=p.explanation?('<div class="pexpl">'+escapeHtml(p.explanation)+'</div>'):'';
     d.innerHTML=
       '<div class="ptitle">'+escapeHtml(p.exercise)+'</div>'+
-      '<div class="pmeta">'+escapeHtml(p.sets)+' Sätze × '+escapeHtml(p.reps)+' Reps'+equip+'</div>'+
+      '<div class="pmeta">'+escapeHtml(p.sets)+' Sätze × '+escapeHtml(p.reps)+' Reps'+equip+vv+'</div>'+
       expl+
       '<div class="plast">'+lwTxt+'</div>'+
       '<button class="btn pdone">Erledigt – erfassen ›</button>';
@@ -859,7 +880,7 @@ function startPlanned(p,lw){
   var w=lw?lw.weight:'';
   var unit=(lw&&lw.unit==='lbs')?'lbs':'kg';
   for(var i=0;i<n;i++){
-    var el=setTemplate(i+1,p.reps,w,unit,p.equipment||'','','');
+    var el=setTemplate(i+1,p.reps,w,unit,p.equipment||'',p.variant||'',p.variant||'');
     sets.appendChild(el);
   }
   switchTab('log');
@@ -927,7 +948,11 @@ function renderSettingsTab(){
   }
   // Admin-Bereich
   renderPeople();
-  document.getElementById('pl_equipment').innerHTML=equipmentOptions('');
+  document.getElementById('pl_date').value=todayStr();
+  document.getElementById('pl_equipment').innerHTML='<option value="">– Gerät –</option>';
+  renderPending();
+  loadAdminExplanations();
+  onAdminPersonChange(); // Daten der aktuell gewählten Person laden
 }
 
 /* ---------- Admin: Personen & Planung ---------- */
@@ -968,26 +993,235 @@ function fillPersonSelect(people){
   var sel=document.getElementById('pl_person');
   sel.innerHTML=people.map(function(p){return '<option value="'+escapeHtml(p.url)+'">'+escapeHtml(p.name)+'</option>';}).join('');
 }
-function sendPlan(){
+/* ---------- Admin: Daten der gewählten Person ---------- */
+var adminTypes=[], adminSettings=[], adminHistory=[], adminPlans=[];
+var adminExplanations={}; // {exercise: text} aus deinem eigenen Sheet
+var pendingPlans=[];       // gesammelte, noch nicht gesendete Pläne
+var adminEditId=null;      // id eines gerade bearbeiteten Plans
+
+function planStatus(msg,type){
+  var st=document.getElementById('plStatus');
+  st.textContent=msg;st.className='status show '+(type||'load');
+  if(type==='ok')setTimeout(function(){st.className='status';},2500);
+}
+function loadAdminExplanations(){
+  var url=getUrl();if(!url)return;
+  fetch(url+'?action=explanations').then(function(r){return r.json();})
+    .then(function(d){adminExplanations=(d&&d.explanations)||{};}).catch(function(){});
+}
+function adminVariantsFor(eq){
+  return adminSettings.filter(function(e){return e.equipment===eq;})
+    .map(function(e){return e.label;}).filter(function(l){return l;});
+}
+function planEquipmentOptions(selected){
+  var list=[''].concat(adminTypes.length?adminTypes:DEFAULT_EQUIPMENT);
+  if(selected&&list.indexOf(selected)===-1)list.push(selected);
+  return list.map(function(v){
+    var lab=v===''?'– Gerät –':escapeHtml(v);
+    return '<option value="'+escapeHtml(v)+'"'+(v===selected?' selected':'')+'>'+lab+'</option>';
+  }).join('');
+}
+function planRefreshVariant(preselect){
+  var eq=document.getElementById('pl_equipment').value;
+  var field=document.getElementById('pl_variantField');
+  var sel=document.getElementById('pl_variant');
+  var vs=adminVariantsFor(eq);
+  if(vs.length>0){
+    sel.innerHTML='<option value="">– Variante –</option>'+vs.map(function(l){
+      return '<option value="'+escapeHtml(l)+'"'+(l===preselect?' selected':'')+'>'+escapeHtml(l)+'</option>';}).join('');
+    field.style.display='';
+  }else{sel.innerHTML='';field.style.display='none';}
+}
+function onAdminPersonChange(){
   var url=document.getElementById('pl_person').value;
-  var st=document.getElementById('setStatus');
-  if(!url){st.textContent='Bitte zuerst eine Person anlegen und speichern.';st.className='status show err';return;}
-  var exercise=document.getElementById('pl_exercise').value.trim();
-  if(!exercise){st.textContent='Bitte eine Übung eingeben.';st.className='status show err';return;}
-  var row={
-    exercise:exercise,
+  document.getElementById('pl_open').innerHTML='<div class="empty">'+(url?'Lade…':'Person wählen…')+'</div>';
+  document.getElementById('pl_equipment').innerHTML=planEquipmentOptions('');
+  planRefreshVariant();
+  if(!url)return;
+  fetch(url+'?action=types').then(function(r){return r.json();}).then(function(d){
+    adminTypes=(d&&d.types&&d.types.length)?d.types:DEFAULT_EQUIPMENT;
+    document.getElementById('pl_equipment').innerHTML=planEquipmentOptions('');
+    planRefreshVariant();
+  }).catch(function(){});
+  fetch(url+'?action=settings').then(function(r){return r.json();}).then(function(d){
+    adminSettings=(d&&d.settings)||[];planRefreshVariant();
+  }).catch(function(){});
+  fetch(url+'?action=read').then(function(r){return r.json();}).then(function(d){
+    adminHistory=(d&&d.rows)||[];
+  }).catch(function(){});
+  loadAdminPlans();
+}
+function loadAdminPlans(){
+  var url=document.getElementById('pl_person').value;if(!url)return;
+  fetch(url+'?action=plans').then(function(r){return r.json();}).then(function(d){
+    adminPlans=(d&&d.plans)||[];renderOpenPlans();
+  }).catch(function(e){document.getElementById('pl_open').innerHTML='<div class="empty">Fehler: '+e.message+'</div>';});
+}
+function autofillExplanation(){
+  var ex=document.getElementById('pl_exercise').value.trim();
+  var t=document.getElementById('pl_expl');
+  if(ex&&adminExplanations[ex]!=null&&t.value.trim()===''){t.value=adminExplanations[ex];}
+}
+// aktuelle Formulareingaben als Plan-Objekt
+function readPlanForm(){
+  return {
+    date:document.getElementById('pl_date').value,
+    exercise:document.getElementById('pl_exercise').value.trim(),
     equipment:document.getElementById('pl_equipment').value,
+    variant:document.getElementById('pl_variant')?document.getElementById('pl_variant').value:'',
     sets:document.getElementById('pl_sets').value,
     reps:document.getElementById('pl_reps').value,
     explanation:document.getElementById('pl_expl').value
   };
-  st.textContent='Sende Plan…';st.className='status show load';
-  postJSON(url,{action:'savePlan',row:row}).then(function(){
-    st.textContent='Plan gesendet ✓';st.className='status show ok';
-    document.getElementById('pl_exercise').value='';
-    document.getElementById('pl_expl').value='';
-    setTimeout(function(){st.className='status';},2500);
-  }).catch(function(e){st.textContent='Fehler: '+e.message;st.className='status show err';});
+}
+function resetPlanForm(){
+  document.getElementById('pl_exercise').value='';
+  document.getElementById('pl_expl').value='';
+  document.getElementById('pl_sets').value='3';
+  document.getElementById('pl_reps').value='10';
+  document.getElementById('pl_equipment').innerHTML=planEquipmentOptions('');
+  planRefreshVariant();
+}
+function addPending(){
+  if(!document.getElementById('pl_person').value){planStatus('Bitte zuerst eine Person wählen.','err');return;}
+  var p=readPlanForm();
+  if(!p.exercise){planStatus('Bitte eine Übung eingeben.','err');return;}
+  pendingPlans.push(p);
+  renderPending();
+  resetPlanForm();
+  planStatus('Zur Liste hinzugefügt.','ok');
+}
+function renderPending(){
+  var box=document.getElementById('pl_pending');box.innerHTML='';
+  pendingPlans.forEach(function(p,idx){
+    var d=document.createElement('div');d.className='pendrow';
+    var v=p.variant?(' · '+escapeHtml(p.variant)):'';
+    d.innerHTML='<span>'+escapeHtml(p.exercise)+' · '+escapeHtml(p.sets)+'×'+escapeHtml(p.reps)+(p.equipment?(' · '+escapeHtml(p.equipment)):'')+v+'</span>'+
+      '<button class="del-row" type="button">×</button>';
+    d.querySelector('.del-row').onclick=function(){pendingPlans.splice(idx,1);renderPending();};
+    box.appendChild(d);
+  });
+}
+function sendAllPlans(){
+  var url=document.getElementById('pl_person').value;
+  if(!url){planStatus('Bitte zuerst eine Person wählen.','err');return;}
+  // ggf. noch nicht hinzugefügte, aber ausgefüllte Übung mitnehmen
+  var cur=readPlanForm();
+  var rows=pendingPlans.slice();
+  if(cur.exercise)rows.push(cur);
+  if(!rows.length){planStatus('Keine Übungen zum Senden.','err');return;}
+  planStatus('Sende…','load');
+  postJSON(url,{action:'savePlans',rows:rows}).then(function(){
+    // geänderte/neue Erklärungen zentral speichern
+    var myUrl=getUrl();var seen={};
+    rows.forEach(function(p){
+      var ex=p.exercise;if(!ex||seen[ex])return;seen[ex]=true;
+      if((p.explanation||'')!==(adminExplanations[ex]||'')){
+        adminExplanations[ex]=p.explanation||'';
+        if(myUrl)postJSON(myUrl,{action:'saveExplanation',row:{exercise:ex,explanation:p.explanation||''}}).catch(function(){});
+      }
+    });
+    pendingPlans=[];renderPending();resetPlanForm();
+    planStatus('Alle Pläne gesendet ✓','ok');
+    loadAdminPlans();
+  }).catch(function(e){planStatus('Fehler: '+e.message,'err');});
+}
+
+/* ---------- Admin: offene Pläne verwalten ---------- */
+function renderOpenPlans(){
+  var box=document.getElementById('pl_open');
+  if(!adminPlans.length){box.innerHTML='<div class="empty">Keine offenen Pläne.</div>';return;}
+  box.innerHTML='';
+  adminPlans.forEach(function(p){
+    var d=document.createElement('div');d.className='planadmin';d.dataset.id=p.id;
+    var v=p.variant?(' · '+escapeHtml(p.variant)):'';
+    var expl=p.explanation?('<div class="pa-expl">'+escapeHtml(p.explanation)+'</div>'):'';
+    d.innerHTML=
+      '<div><b>'+escapeHtml(p.exercise)+'</b></div>'+
+      '<div class="pa-meta">'+(p.date?escapeHtml(p.date)+' · ':'')+escapeHtml(p.sets)+'×'+escapeHtml(p.reps)+(p.equipment?(' · '+escapeHtml(p.equipment)):'')+v+'</div>'+
+      expl+
+      '<div class="pa-actions"><button class="pa-edit">Bearbeiten</button><button class="pa-log">Eintragen</button><button class="pa-del">Löschen</button></div>';
+    d.querySelector('.pa-edit').onclick=function(){editPlanInline(d,p);};
+    d.querySelector('.pa-del').onclick=function(){deletePlanAdmin(p);};
+    d.querySelector('.pa-log').onclick=function(){logPlanDirect(p);};
+    box.appendChild(d);
+  });
+}
+function editPlanInline(card,p){
+  card.innerHTML=
+    '<div class="field" style="margin-bottom:8px;"><label>Datum</label><input type="date" class="e-date" value="'+(p.date||'')+'"></div>'+
+    '<div class="field" style="margin-bottom:8px;"><label>Übung</label><input type="text" class="e-exercise" value="'+(p.exercise||'').replace(/"/g,'&quot;')+'"></div>'+
+    '<div class="field" style="margin-bottom:8px;"><label>Gerät</label><select class="e-equipment">'+planEquipmentOptions(p.equipment||'')+'</select></div>'+
+    '<div class="field e-variant-field" style="margin-bottom:8px;display:none;"><label>Variante</label><select class="e-variant"></select></div>'+
+    '<div class="row"><div class="field" style="margin-bottom:8px;"><label>Sätze</label><input type="number" class="e-sets" value="'+(p.sets||'')+'"></div>'+
+    '<div class="field" style="margin-bottom:8px;"><label>Reps</label><input type="number" class="e-reps" value="'+(p.reps||'')+'"></div></div>'+
+    '<div class="field" style="margin-bottom:8px;"><label>Erklärung</label><textarea class="e-expl" rows="2">'+escapeHtml(p.explanation||'')+'</textarea></div>'+
+    '<div class="pa-actions"><button class="pa-log e-save">Speichern</button><button class="pa-del e-cancel">Abbrechen</button></div>';
+  function refVar(pre){
+    var eq=card.querySelector('.e-equipment').value;var f=card.querySelector('.e-variant-field');var s=card.querySelector('.e-variant');
+    var vs=adminVariantsFor(eq);
+    if(vs.length>0){s.innerHTML='<option value="">– Variante –</option>'+vs.map(function(l){return '<option value="'+escapeHtml(l)+'"'+(l===pre?' selected':'')+'>'+escapeHtml(l)+'</option>';}).join('');f.style.display='';}
+    else{s.innerHTML='';f.style.display='none';}
+  }
+  card.querySelector('.e-equipment').onchange=function(){refVar('');};
+  refVar(p.variant||'');
+  card.querySelector('.e-cancel').onclick=function(){renderOpenPlans();};
+  card.querySelector('.e-save').onclick=function(){
+    var url=document.getElementById('pl_person').value;
+    var row={id:p.id,
+      date:card.querySelector('.e-date').value,
+      exercise:card.querySelector('.e-exercise').value.trim(),
+      equipment:card.querySelector('.e-equipment').value,
+      variant:card.querySelector('.e-variant')?card.querySelector('.e-variant').value:'',
+      sets:card.querySelector('.e-sets').value,
+      reps:card.querySelector('.e-reps').value,
+      explanation:card.querySelector('.e-expl').value};
+    planStatus('Speichere…','load');
+    postJSON(url,{action:'updatePlan',row:row}).then(function(){
+      // Erklärung ggf. zentral aktualisieren
+      var myUrl=getUrl();
+      if(myUrl&&(row.explanation||'')!==(adminExplanations[row.exercise]||'')){
+        adminExplanations[row.exercise]=row.explanation||'';
+        postJSON(myUrl,{action:'saveExplanation',row:{exercise:row.exercise,explanation:row.explanation||''}}).catch(function(){});
+      }
+      planStatus('Aktualisiert ✓','ok');loadAdminPlans();
+    }).catch(function(e){planStatus('Fehler: '+e.message,'err');});
+  };
+}
+function deletePlanAdmin(p){
+  if(!confirm('Diesen Plan löschen?'))return;
+  var url=document.getElementById('pl_person').value;
+  planStatus('Lösche…','load');
+  postJSON(url,{action:'deletePlan',row:{id:p.id}}).then(function(){
+    adminPlans=adminPlans.filter(function(x){return x.id!==p.id;});renderOpenPlans();planStatus('Gelöscht ✓','ok');
+  }).catch(function(e){planStatus('Fehler: '+e.message,'err');});
+}
+function adminLastWeight(exercise,equipment){
+  var key=((exercise||'')+'||'+(equipment||'')).toLowerCase();var best=null;
+  adminHistory.forEach(function(r){
+    if(((r.exercise||'')+'||'+(r.equipment||'')).toLowerCase()!==key)return;
+    if(!best||String(r.date)>best.date)best={date:String(r.date),weight:r.weight,unit:r.unit};
+  });
+  return best;
+}
+function logPlanDirect(p){
+  var url=document.getElementById('pl_person').value;
+  var lw=adminLastWeight(p.exercise,p.equipment);
+  var n=parseInt(p.sets,10);if(isNaN(n)||n<1)n=1;
+  var w=lw?lw.weight:'';var unit=(lw&&lw.unit==='lbs')?'lbs':'kg';
+  if(!confirm('„'+p.exercise+'" mit '+(w!==''?(w+' '+unit):'ohne Gewicht')+' in die Historie eintragen?'))return;
+  var rows=[];
+  for(var i=0;i<n;i++){
+    rows.push({date:todayStr(),exercise:p.exercise,setNo:i+1,reps:p.reps,weight:w,unit:unit,
+      equipment:p.equipment||'',comment:p.variant||''});
+  }
+  planStatus('Trage ein…','load');
+  postJSON(url,{action:'create',rows:rows}).then(function(){
+    return postJSON(url,{action:'deletePlan',row:{id:p.id}});
+  }).then(function(){
+    adminPlans=adminPlans.filter(function(x){return x.id!==p.id;});renderOpenPlans();
+    planStatus('Eingetragen ✓','ok');
+  }).catch(function(e){planStatus('Fehler: '+e.message,'err');});
 }
 function saveSettingsTab(){
   var url=getUrl();if(!url){openCfg();return;}
@@ -1153,7 +1387,12 @@ document.addEventListener('DOMContentLoaded',function(){
     document.getElementById('personRows').appendChild(personRowTemplate('',''));
   };
   document.getElementById('personSave').onclick=savePeople;
-  document.getElementById('pl_send').onclick=sendPlan;
+  document.getElementById('pl_person').onchange=onAdminPersonChange;
+  document.getElementById('pl_equipment').onchange=function(){planRefreshVariant();};
+  document.getElementById('pl_exercise').onchange=autofillExplanation;
+  document.getElementById('pl_exercise').onblur=autofillExplanation;
+  document.getElementById('pl_add').onclick=addPending;
+  document.getElementById('pl_sendAll').onclick=sendAllPlans;
   refreshAllSets(); // Varianten-Felder mit dem lokalen Cache befüllen
   if(!getUrl()){openCfg();}else{loadEntries();fetchExercises();}
 });
