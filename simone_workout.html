@@ -6,9 +6,9 @@
 <meta name="theme-color" content="#3f6b4f" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-<meta name="apple-mobile-web-app-title" content="Gym Tracker" />
+<meta name="apple-mobile-web-app-title" content="Simone" />
 <link rel="apple-touch-icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" />
-<title>Gym Tracker</title>
+<title>Simone</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
   :root{
@@ -122,7 +122,7 @@
   }
   .tabbar button{
     flex:1;background:none;border:none;padding:12px 0 10px;
-    font-size:12px;font-weight:600;color:var(--muted);
+    font-size:10.5px;font-weight:600;color:var(--muted);white-space:nowrap;
     display:flex;flex-direction:column;align-items:center;gap:3px;
   }
   .tabbar button.active{color:var(--green-dark);}
@@ -164,6 +164,18 @@
   .typerow{display:grid;grid-template-columns:1fr 32px;gap:6px;align-items:center;margin-bottom:8px;}
   .typerow input{padding:10px;font-size:14px;}
   .typerow .del-row{background:none;border:none;color:var(--danger);font-size:20px;font-weight:700;padding:0;}
+
+  /* Geplante Workouts */
+  .plan{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,.05);}
+  .plan .ptitle{font-weight:700;font-size:16px;color:var(--green-dark);}
+  .plan .pmeta{font-size:13px;color:var(--muted);margin-top:4px;}
+  .plan .pexpl{font-size:13px;color:var(--text);margin-top:8px;line-height:1.4;white-space:pre-wrap;}
+  .plan .plast{font-size:13px;margin-top:8px;color:var(--green-dark);font-weight:600;}
+  .plan .pdone{margin-top:12px;}
+  /* Admin: Personen + Planformular */
+  .personrow{display:grid;grid-template-columns:1fr 1.4fr 32px;gap:6px;align-items:center;margin-bottom:8px;}
+  .personrow input{padding:10px;font-size:14px;}
+  .personrow .del-row{background:none;border:none;color:var(--danger);font-size:20px;font-weight:700;padding:0;}
 </style>
 </head>
 <body>
@@ -243,6 +255,14 @@
 </div>
 </div>
 
+<!-- ===== TAB: GEPLANT ===== -->
+<div class="tab" id="tab-plan">
+<div class="wrap">
+  <div class="section-title">Geplante Workouts</div>
+  <div id="plannedList"><div class="empty">Lade…</div></div>
+</div>
+</div>
+
 <!-- ===== TAB: EINSTELLUNGEN ===== -->
 <div class="tab" id="tab-set">
 <div class="wrap">
@@ -267,6 +287,29 @@
     <button class="btn add" id="typeAddRow">+ Gerät hinzufügen</button>
   </div>
   <button class="btn" id="setSave">Alles speichern</button>
+
+  <div class="card" style="margin-top:16px;">
+    <div class="section-title">Für andere planen (Admin)</div>
+    <p style="font-size:13px;color:var(--muted);margin:0 0 12px;line-height:1.4;">
+      Personen mit ihrer App-URL (…/exec). Wird nur lokal auf diesem Gerät gespeichert.
+    </p>
+    <div id="personRows"></div>
+    <button class="btn add" id="personAddRow">+ Person hinzufügen</button>
+    <button class="btn secondary" id="personSave" style="margin-top:10px;">Personen speichern</button>
+
+    <div style="height:1px;background:var(--border);margin:16px 0;"></div>
+
+    <div class="section-title">Workout planen</div>
+    <div class="field"><label>Person</label><select id="pl_person"></select></div>
+    <div class="field"><label>Übung</label><input type="text" id="pl_exercise" list="exerciseList" placeholder="z. B. Bankdrücken"></div>
+    <div class="field"><label>Gerät</label><select id="pl_equipment"></select></div>
+    <div class="row">
+      <div class="field"><label>Sätze</label><input type="number" id="pl_sets" inputmode="numeric" value="3"></div>
+      <div class="field"><label>Reps</label><input type="number" id="pl_reps" inputmode="numeric" value="10"></div>
+    </div>
+    <div class="field"><label>Erklärung (optional)</label><textarea id="pl_expl" rows="3" placeholder="Ausführung, Hinweise …"></textarea></div>
+    <button class="btn" id="pl_send">Plan senden</button>
+  </div>
 </div>
 </div>
 
@@ -317,6 +360,7 @@
 <!-- Tab-Leiste -->
 <nav class="tabbar">
   <button id="navLog" class="active"><span class="ic">📝</span>Erfassen</button>
+  <button id="navPlan"><span class="ic">📋</span>Geplant</button>
   <button id="navCal"><span class="ic">📅</span>Kalender</button>
   <button id="navAna"><span class="ic">📊</span>Analyse</button>
   <button id="navSet"><span class="ic">⚙️</span>Einstellungen</button>
@@ -328,7 +372,7 @@
    Trage hier deine Apps-Script-URL ein, oder lass sie leer
    und gib sie beim ersten Start in der App ein.
    ============================================================ */
-var SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwYfhdOAC_7KeBkqRH4sbbVBwQG3ndMHYfG7tOpULYw2jOqOAXsa19njkAhMyqPuWZ1/exec"; // <-- HIER deine /exec URL eintragen (optional)
+var SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwYfhdOAC_7KeBkqRH4sbbVBwQG3ndMHYfG7tOpULYw2jOqOAXsa19njkAhMyqPuWZ1/exec/"; // <-- HIER deine /exec URL eintragen (optional)
 
 // Standard-Geräte (Seed) – im Einstellungen-Tab editierbar, dann im Sheet gespeichert
 var DEFAULT_EQUIPMENT = ["Machine","Resistance Band","Loop Band","Tube","Thera Loop","Body Weight","Kettlebell","TRX","Dumbbell","Barbell"];
@@ -338,6 +382,7 @@ var STORE_URL = "gymtracker_url";
 var STORE_EX  = "gymtracker_exercises";
 var STORE_TYPES = "gymtracker_types";
 var STORE_SETTINGS = "gymtracker_settings";
+var STORE_PEOPLE = "gymtracker_people"; // Admin: [{name,url}]
 var calYear, calMonth; // calMonth 0-basiert
 var equipmentTypes = DEFAULT_EQUIPMENT.slice(); // editierbare Geräteliste (lokaler Stand)
 var equipSettings = []; // [{equipment,label,weight}] (lokaler Stand)
@@ -537,6 +582,9 @@ function save(){
       comment:s.querySelector('.s-comment').value
     });
   }
+  // Falls dieser Speichervorgang einen geplanten Workout abschließt
+  var planToClose=(activePlan && activePlan.exercise===exercise)?activePlan:null;
+  activePlan=null;
   // Satznummer aus den bereits angezeigten Einträgen fortführen (kein Vorab-Call)
   var max=0;
   currentEntries.forEach(function(o){
@@ -566,6 +614,12 @@ function save(){
     var ids=(d&&d.ids)||[];
     optimistic.forEach(function(o,i){o._pending=false;if(ids[i])o.id=ids[i];});
     renderEntries();
+    // geplanten Workout als erledigt entfernen
+    if(planToClose){
+      postJSON(url,{action:'deletePlan',row:{id:planToClose.id}})
+        .then(function(){plannedItems=plannedItems.filter(function(p){return p.id!==planToClose.id;});})
+        .catch(function(){});
+    }
   }).catch(function(e){
     // Rückgängig machen
     currentEntries=currentEntries.filter(function(o){return optimistic.indexOf(o)===-1;});
@@ -726,16 +780,90 @@ function openDate(ds){
 /* ---------- Tabs ---------- */
 function switchTab(which){
   document.getElementById('tab-log').classList.toggle('active',which==='log');
+  document.getElementById('tab-plan').classList.toggle('active',which==='plan');
   document.getElementById('tab-cal').classList.toggle('active',which==='cal');
   document.getElementById('tab-ana').classList.toggle('active',which==='ana');
   document.getElementById('tab-set').classList.toggle('active',which==='set');
   document.getElementById('navLog').classList.toggle('active',which==='log');
+  document.getElementById('navPlan').classList.toggle('active',which==='plan');
   document.getElementById('navCal').classList.toggle('active',which==='cal');
   document.getElementById('navAna').classList.toggle('active',which==='ana');
   document.getElementById('navSet').classList.toggle('active',which==='set');
+  if(which==='plan')loadPlanned();
   if(which==='cal')loadCalendar();
   if(which==='ana')loadAnalysis();
   if(which==='set')loadSettingsTab();
+}
+
+/* ---------- Geplante Workouts (Athlet) ---------- */
+var plannedItems=[]; // aktuell geladene Pläne
+var activePlan=null; // {id,exercise} – gerade abzuarbeitender Plan
+// zuletzt genutztes Gewicht je "übung||gerät" aus dem Verlauf
+function buildLastWeightMap(rows){
+  var map={};
+  rows.forEach(function(r){
+    var key=((r.exercise||'')+'||'+(r.equipment||'')).toLowerCase();
+    var prev=map[key];
+    // jüngstes Datum gewinnt
+    if(!prev || String(r.date)>prev.date){map[key]={date:String(r.date),weight:r.weight,unit:r.unit};}
+  });
+  return map;
+}
+function lastWeightFor(map,exercise,equipment){
+  return map[((exercise||'')+'||'+(equipment||'')).toLowerCase()]||null;
+}
+function loadPlanned(){
+  var url=getUrl();var box=document.getElementById('plannedList');
+  if(!url){box.innerHTML='<div class="empty">Bitte zuerst die Apps-Script-URL einrichten.</div>';return;}
+  box.innerHTML='<div class="empty">Lade…</div>';
+  var plans=null,hist=null;
+  function ready(){
+    if(plans===null||hist===null)return;
+    plannedItems=plans;
+    renderPlanned(buildLastWeightMap(hist));
+  }
+  fetch(url+'?action=plans').then(function(r){return r.json();})
+    .then(function(d){plans=(d&&d.plans)||[];ready();})
+    .catch(function(e){box.innerHTML='<div class="empty">Fehler beim Laden: '+e.message+'</div>';});
+  fetch(url+'?action=read').then(function(r){return r.json();})
+    .then(function(d){hist=(d&&d.rows)||[];ready();})
+    .catch(function(){hist=[];ready();});
+}
+function renderPlanned(lwMap){
+  var box=document.getElementById('plannedList');
+  if(!plannedItems.length){box.innerHTML='<div class="empty">Keine geplanten Workouts.</div>';return;}
+  box.innerHTML='';
+  plannedItems.forEach(function(p){
+    var d=document.createElement('div');d.className='plan';
+    var lw=lastWeightFor(lwMap,p.exercise,p.equipment);
+    var lwTxt=lw?('Zuletzt: '+escapeHtml(lw.weight)+' '+escapeHtml(lw.unit||'')):'Noch kein Verlauf';
+    var equip=p.equipment?(' · '+escapeHtml(p.equipment)):'';
+    var expl=p.explanation?('<div class="pexpl">'+escapeHtml(p.explanation)+'</div>'):'';
+    d.innerHTML=
+      '<div class="ptitle">'+escapeHtml(p.exercise)+'</div>'+
+      '<div class="pmeta">'+escapeHtml(p.sets)+' Sätze × '+escapeHtml(p.reps)+' Reps'+equip+'</div>'+
+      expl+
+      '<div class="plast">'+lwTxt+'</div>'+
+      '<button class="btn pdone">Erledigt – erfassen ›</button>';
+    d.querySelector('.pdone').onclick=function(){startPlanned(p,lw);};
+    box.appendChild(d);
+  });
+}
+// Plan abarbeiten: Erfassen-Formular vorausfüllen
+function startPlanned(p,lw){
+  activePlan={id:p.id,exercise:p.exercise};
+  document.getElementById('date').value=todayStr();
+  document.getElementById('exercise').value=p.exercise;
+  var sets=document.getElementById('sets');sets.innerHTML='';
+  var n=parseInt(p.sets,10);if(isNaN(n)||n<1)n=1;
+  var w=lw?lw.weight:'';
+  var unit=(lw&&lw.unit==='lbs')?'lbs':'kg';
+  for(var i=0;i<n;i++){
+    var el=setTemplate(i+1,p.reps,w,unit,p.equipment||'','','');
+    sets.appendChild(el);
+  }
+  switchTab('log');
+  loadEntries();
 }
 
 /* ---------- Einstellungen-Tab ---------- */
@@ -797,6 +925,69 @@ function renderSettingsTab(){
   }else{
     box.appendChild(settRowTemplate(list[0]||'','',''));
   }
+  // Admin-Bereich
+  renderPeople();
+  document.getElementById('pl_equipment').innerHTML=equipmentOptions('');
+}
+
+/* ---------- Admin: Personen & Planung ---------- */
+function readPeople(){var a=[];try{a=JSON.parse(localStorage.getItem(STORE_PEOPLE)||"[]");}catch(e){}return a;}
+function writePeople(a){try{localStorage.setItem(STORE_PEOPLE,JSON.stringify(a));}catch(e){}}
+function personRowTemplate(name,url){
+  var d=document.createElement('div');d.className='personrow';
+  d.innerHTML=
+    '<input type="text" class="p-name" placeholder="Name" value="'+(name||'').replace(/"/g,'&quot;')+'">'+
+    '<input type="url" class="p-url" placeholder="…/exec URL" value="'+(url||'').replace(/"/g,'&quot;')+'">'+
+    '<button class="del-row" type="button" title="Entfernen">×</button>';
+  d.querySelector('.del-row').onclick=function(){d.remove();};
+  return d;
+}
+function renderPeople(){
+  var box=document.getElementById('personRows');box.innerHTML='';
+  var people=readPeople();
+  if(!people.length){box.appendChild(personRowTemplate('',''));}
+  else{people.forEach(function(p){box.appendChild(personRowTemplate(p.name,p.url));});}
+  fillPersonSelect(people);
+}
+function collectPeople(){
+  var out=[];var els=document.getElementById('personRows').children;
+  for(var i=0;i<els.length;i++){
+    var n=els[i].querySelector('.p-name').value.trim();
+    var u=els[i].querySelector('.p-url').value.trim();
+    if(n&&u)out.push({name:n,url:u});
+  }
+  return out;
+}
+function savePeople(){
+  var people=collectPeople();writePeople(people);fillPersonSelect(people);
+  var st=document.getElementById('setStatus');
+  st.textContent='Personen gespeichert ✓';st.className='status show ok';
+  setTimeout(function(){st.className='status';},2500);
+}
+function fillPersonSelect(people){
+  var sel=document.getElementById('pl_person');
+  sel.innerHTML=people.map(function(p){return '<option value="'+escapeHtml(p.url)+'">'+escapeHtml(p.name)+'</option>';}).join('');
+}
+function sendPlan(){
+  var url=document.getElementById('pl_person').value;
+  var st=document.getElementById('setStatus');
+  if(!url){st.textContent='Bitte zuerst eine Person anlegen und speichern.';st.className='status show err';return;}
+  var exercise=document.getElementById('pl_exercise').value.trim();
+  if(!exercise){st.textContent='Bitte eine Übung eingeben.';st.className='status show err';return;}
+  var row={
+    exercise:exercise,
+    equipment:document.getElementById('pl_equipment').value,
+    sets:document.getElementById('pl_sets').value,
+    reps:document.getElementById('pl_reps').value,
+    explanation:document.getElementById('pl_expl').value
+  };
+  st.textContent='Sende Plan…';st.className='status show load';
+  postJSON(url,{action:'savePlan',row:row}).then(function(){
+    st.textContent='Plan gesendet ✓';st.className='status show ok';
+    document.getElementById('pl_exercise').value='';
+    document.getElementById('pl_expl').value='';
+    setTimeout(function(){st.className='status';},2500);
+  }).catch(function(e){st.textContent='Fehler: '+e.message;st.className='status show err';});
 }
 function saveSettingsTab(){
   var url=getUrl();if(!url){openCfg();return;}
@@ -945,6 +1136,7 @@ document.addEventListener('DOMContentLoaded',function(){
   document.getElementById('cfgBg').onclick=function(e){if(e.target.id==='cfgBg')closeCfg();};
   document.querySelector('header').addEventListener('dblclick',openCfg);
   document.getElementById('navLog').onclick=function(){switchTab('log');};
+  document.getElementById('navPlan').onclick=function(){switchTab('plan');};
   document.getElementById('navCal').onclick=function(){switchTab('cal');};
   document.getElementById('navAna').onclick=function(){switchTab('ana');};
   document.getElementById('navSet').onclick=function(){switchTab('set');};
@@ -957,6 +1149,11 @@ document.addEventListener('DOMContentLoaded',function(){
     document.getElementById('typeRows').appendChild(typeRowTemplate(''));
   };
   document.getElementById('setSave').onclick=saveSettingsTab;
+  document.getElementById('personAddRow').onclick=function(){
+    document.getElementById('personRows').appendChild(personRowTemplate('',''));
+  };
+  document.getElementById('personSave').onclick=savePeople;
+  document.getElementById('pl_send').onclick=sendPlan;
   refreshAllSets(); // Varianten-Felder mit dem lokalen Cache befüllen
   if(!getUrl()){openCfg();}else{loadEntries();fetchExercises();}
 });
@@ -968,7 +1165,7 @@ document.addEventListener('DOMContentLoaded',function(){
   var icon="data:image/svg+xml,"+encodeURIComponent(
     '<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512"><rect width="512" height="512" rx="96" fill="#3f6b4f"/><g fill="#e9ecea"><rect x="86" y="226" width="40" height="60" rx="8"/><rect x="386" y="226" width="40" height="60" rx="8"/><rect x="126" y="196" width="44" height="120" rx="10"/><rect x="342" y="196" width="44" height="120" rx="10"/><rect x="170" y="240" width="172" height="32" rx="10"/></g></svg>');
   var manifest={
-    name:"Gym Tracker",short_name:"Gym",start_url:".",scope:".",
+    name:"Simone",short_name:"Simone",start_url:".",scope:".",
     display:"standalone",background_color:"#e9ecea",theme_color:"#3f6b4f",
     icons:[{src:icon,sizes:"512x512",type:"image/svg+xml",purpose:"any maskable"}]
   };
