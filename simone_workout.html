@@ -394,7 +394,11 @@
    ============================================================ */
 var SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwYfhdOAC_7KeBkqRH4sbbVBwQG3ndMHYfG7tOpULYw2jOqOAXsa19njkAhMyqPuWZ1/exec"; // <-- HIER deine /exec URL eintragen (optional)
 
-// Standard-Geräte (Seed) – im Einstellungen-Tab editierbar, dann im Sheet gespeichert
+// ZENTRALE Admin-Tabelle für Geräte & Varianten. Alle Apps lesen von hier.
+// Nur wessen App auf diese URL zeigt (= du), sieht den Einstellungen-Tab.
+var ADMIN_URL = "https://script.google.com/macros/s/AKfycbxipzVeMld10i0iv7HSCgP2YUr3uLUH5fcBoZT5MdIm_3O66rkWGA0h_bJHLOc-oEFZXA/exec";
+
+// Standard-Geräte (Seed / Fallback)
 var DEFAULT_EQUIPMENT = ["Machine","Resistance Band","Loop Band","Tube","Thera Loop","Body Weight","Kettlebell","TRX","Dumbbell","Barbell"];
 
 /* ---------- State ---------- */
@@ -408,6 +412,10 @@ var equipmentTypes = DEFAULT_EQUIPMENT.slice(); // editierbare Geräteliste (lok
 var equipSettings = []; // [{equipment,label,weight}] (lokaler Stand)
 
 function getUrl(){ return SCRIPT_URL || localStorage.getItem(STORE_URL) || ""; }
+// Quelle für die zentrale Geräte-/Variantentabelle
+function equipSource(){ return ADMIN_URL || getUrl(); }
+// Admin ist, wessen App auf die zentrale Tabelle zeigt
+function isAdmin(){ return !!ADMIN_URL && getUrl()===ADMIN_URL; }
 function setUrl(u){ localStorage.setItem(STORE_URL,u); }
 
 /* ---------- Status ---------- */
@@ -559,17 +567,17 @@ function saveEquipCache(){
   try{localStorage.setItem(STORE_TYPES,JSON.stringify(equipmentTypes));}catch(e){}
   try{localStorage.setItem(STORE_SETTINGS,JSON.stringify(equipSettings));}catch(e){}
 }
-// Equipment-Einstellungen (Varianten) vom Sheet laden + lokal cachen
+// Varianten aus der ZENTRALEN Tabelle laden + lokal cachen
 function fetchSettings(cb){
-  var url=getUrl();if(!url){if(cb)cb();return;}
+  var url=equipSource();if(!url){if(cb)cb();return;}
   fetch(url+'?action=settings')
     .then(function(r){return r.json();})
     .then(function(d){equipSettings=(d&&d.settings)||[];saveEquipCache();if(cb)cb();})
     .catch(function(){if(cb)cb();});
 }
-// Geräteliste vom Sheet laden + lokal cachen (Fallback: Standardliste)
+// Geräteliste aus der ZENTRALEN Tabelle laden + lokal cachen (Fallback: Standardliste)
 function fetchTypes(cb){
-  var url=getUrl();if(!url){if(cb)cb();return;}
+  var url=equipSource();if(!url){if(cb)cb();return;}
   fetch(url+'?action=types')
     .then(function(r){return r.json();})
     .then(function(d){
@@ -849,25 +857,44 @@ function loadPlanned(){
     .then(function(d){hist=(d&&d.rows)||[];ready();})
     .catch(function(){hist=[];ready();});
 }
+function fmtDateLabel(ds){
+  if(!ds)return 'Ohne Datum';
+  var p=ds.split('-');if(p.length!==3)return ds;
+  return p[2]+'.'+p[1]+'.'+p[0];
+}
 function renderPlanned(lwMap){
   var box=document.getElementById('plannedList');
   if(!plannedItems.length){box.innerHTML='<div class="empty">Keine geplanten Workouts.</div>';return;}
   box.innerHTML='';
+  // nach Datum gruppieren
+  var groups={};var order=[];
   plannedItems.forEach(function(p){
-    var d=document.createElement('div');d.className='plan';
-    var lw=lastWeightFor(lwMap,p.exercise,p.equipment);
-    var lwTxt=lw?('Zuletzt: '+escapeHtml(lw.weight)+' '+escapeHtml(lw.unit||'')):'Noch kein Verlauf';
-    var equip=p.equipment?(' · '+escapeHtml(p.equipment)):'';
-    var vv=p.variant?(' · '+escapeHtml(p.variant)):'';
-    var expl=p.explanation?('<div class="pexpl">'+escapeHtml(p.explanation)+'</div>'):'';
-    d.innerHTML=
-      '<div class="ptitle">'+escapeHtml(p.exercise)+'</div>'+
-      '<div class="pmeta">'+escapeHtml(p.sets)+' Sätze × '+escapeHtml(p.reps)+' Reps'+equip+vv+'</div>'+
-      expl+
-      '<div class="plast">'+lwTxt+'</div>'+
-      '<button class="btn pdone">Erledigt – erfassen ›</button>';
-    d.querySelector('.pdone').onclick=function(){startPlanned(p,lw);};
-    box.appendChild(d);
+    var key=p.date||'';
+    if(!groups[key]){groups[key]=[];order.push(key);}
+    groups[key].push(p);
+  });
+  // Datumsschlüssel sortieren (leere/ohne Datum ans Ende)
+  order.sort(function(a,b){if(!a)return 1;if(!b)return -1;return a<b?-1:1;});
+  order.forEach(function(key){
+    var h=document.createElement('div');h.className='section-title';h.style.marginTop='4px';
+    h.textContent=fmtDateLabel(key);
+    box.appendChild(h);
+    groups[key].forEach(function(p){
+      var d=document.createElement('div');d.className='plan';
+      var lw=lastWeightFor(lwMap,p.exercise,p.equipment);
+      var lwTxt=lw?('Zuletzt: '+escapeHtml(lw.weight)+' '+escapeHtml(lw.unit||'')):'Noch kein Verlauf';
+      var equip=p.equipment?(' · '+escapeHtml(p.equipment)):'';
+      var vv=p.variant?(' · '+escapeHtml(p.variant)):'';
+      var expl=p.explanation?('<div class="pexpl">'+escapeHtml(p.explanation)+'</div>'):'';
+      d.innerHTML=
+        '<div class="ptitle">'+escapeHtml(p.exercise)+'</div>'+
+        '<div class="pmeta">'+escapeHtml(p.sets)+' Sätze × '+escapeHtml(p.reps)+' Reps'+equip+vv+'</div>'+
+        expl+
+        '<div class="plast">'+lwTxt+'</div>'+
+        '<button class="btn pdone">Erledigt – erfassen ›</button>';
+      d.querySelector('.pdone').onclick=function(){startPlanned(p,lw);};
+      box.appendChild(d);
+    });
   });
 }
 // Plan abarbeiten: Erfassen-Formular vorausfüllen
@@ -1027,27 +1054,40 @@ function planRefreshVariant(preselect){
   var sel=document.getElementById('pl_variant');
   var vs=adminVariantsFor(eq);
   if(vs.length>0){
+    // ohne explizite Vorgabe: zuletzt von der Person genutzte Variante vorwählen
+    var pre=(preselect!=null)?preselect:adminLastVariant(document.getElementById('pl_exercise').value.trim(),eq);
     sel.innerHTML='<option value="">– Variante –</option>'+vs.map(function(l){
-      return '<option value="'+escapeHtml(l)+'"'+(l===preselect?' selected':'')+'>'+escapeHtml(l)+'</option>';}).join('');
+      return '<option value="'+escapeHtml(l)+'"'+(l===pre?' selected':'')+'>'+escapeHtml(l)+'</option>';}).join('');
     field.style.display='';
   }else{sel.innerHTML='';field.style.display='none';}
 }
+// zuletzt von der Person genutzte Variante (aus Verlauf) für Übung+Gerät, sonst nur Gerät
+function adminLastVariant(exercise,equipment){
+  var vs=adminVariantsFor(equipment);if(!vs.length)return '';
+  function scan(matchEx){
+    var best=null;
+    adminHistory.forEach(function(r){
+      if((r.equipment||'')!==equipment)return;
+      if(matchEx && (r.exercise||'').toLowerCase()!==(exercise||'').toLowerCase())return;
+      if(vs.indexOf(r.comment)===-1)return;
+      if(!best||String(r.date)>best.date)best={date:String(r.date),variant:r.comment};
+    });
+    return best?best.variant:'';
+  }
+  return scan(true)||scan(false);
+}
 function onAdminPersonChange(){
   var url=document.getElementById('pl_person').value;
+  // Geräte & Varianten kommen zentral (nicht von der Person)
+  adminTypes=equipmentTypes.slice();
+  adminSettings=equipSettings.slice();
   document.getElementById('pl_open').innerHTML='<div class="empty">'+(url?'Lade…':'Person wählen…')+'</div>';
   document.getElementById('pl_equipment').innerHTML=planEquipmentOptions('');
   planRefreshVariant();
   if(!url)return;
-  fetch(url+'?action=types').then(function(r){return r.json();}).then(function(d){
-    adminTypes=(d&&d.types&&d.types.length)?d.types:DEFAULT_EQUIPMENT;
-    document.getElementById('pl_equipment').innerHTML=planEquipmentOptions('');
-    planRefreshVariant();
-  }).catch(function(){});
-  fetch(url+'?action=settings').then(function(r){return r.json();}).then(function(d){
-    adminSettings=(d&&d.settings)||[];planRefreshVariant();
-  }).catch(function(){});
+  // Nur Verlauf (für letzte Variante/Gewicht) und offene Pläne der Person laden
   fetch(url+'?action=read').then(function(r){return r.json();}).then(function(d){
-    adminHistory=(d&&d.rows)||[];
+    adminHistory=(d&&d.rows)||[];planRefreshVariant();
   }).catch(function(){});
   loadAdminPlans();
 }
@@ -1365,7 +1405,7 @@ document.addEventListener('DOMContentLoaded',function(){
   document.getElementById('modalBg').onclick=function(e){if(e.target.id==='modalBg')closeEdit();};
   document.getElementById('cfgSave').onclick=function(){
     var u=document.getElementById('cfgUrl').value.trim();
-    if(u){setUrl(u);closeCfg();loadEntries();fetchExercises();status('URL gespeichert ✓','ok');}
+    if(u){setUrl(u);closeCfg();applyAdminVisibility();loadEntries();fetchExercises();fetchTypes(refreshAllSets);fetchSettings(refreshAllSets);status('URL gespeichert ✓','ok');}
   };
   document.getElementById('cfgBg').onclick=function(e){if(e.target.id==='cfgBg')closeCfg();};
   document.querySelector('header').addEventListener('dblclick',openCfg);
@@ -1389,13 +1429,20 @@ document.addEventListener('DOMContentLoaded',function(){
   document.getElementById('personSave').onclick=savePeople;
   document.getElementById('pl_person').onchange=onAdminPersonChange;
   document.getElementById('pl_equipment').onchange=function(){planRefreshVariant();};
-  document.getElementById('pl_exercise').onchange=autofillExplanation;
-  document.getElementById('pl_exercise').onblur=autofillExplanation;
+  document.getElementById('pl_exercise').onchange=function(){autofillExplanation();planRefreshVariant();};
+  document.getElementById('pl_exercise').onblur=function(){autofillExplanation();planRefreshVariant();};
   document.getElementById('pl_add').onclick=addPending;
   document.getElementById('pl_sendAll').onclick=sendAllPlans;
+  applyAdminVisibility(); // Einstellungen-Tab nur für Admin
   refreshAllSets(); // Varianten-Felder mit dem lokalen Cache befüllen
-  if(!getUrl()){openCfg();}else{loadEntries();fetchExercises();}
+  if(!getUrl()){openCfg();}else{loadEntries();fetchExercises();fetchTypes(refreshAllSets);fetchSettings(refreshAllSets);}
 });
+// Einstellungen-Tab (inkl. Admin-Bereich) nur anzeigen, wenn diese App auf die zentrale Tabelle zeigt
+function applyAdminVisibility(){
+  var show=isAdmin();
+  document.getElementById('navSet').style.display=show?'':'none';
+  if(!show){switchTab('log');}
+}
 
 /* ============================================================
    PWA: Manifest (inline) + Service Worker (inline via Blob)
