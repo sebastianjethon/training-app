@@ -6,9 +6,9 @@
 <meta name="theme-color" content="#3f6b4f" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-<meta name="apple-mobile-web-app-title" content="Gym Tracker" />
+<meta name="apple-mobile-web-app-title" content="Carolin" />
 <link rel="apple-touch-icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" />
-<title>Gym Tracker</title>
+<title>Carolin</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
   :root{
@@ -122,7 +122,7 @@
   }
   .tabbar button{
     flex:1;background:none;border:none;padding:12px 0 10px;
-    font-size:12px;font-weight:600;color:var(--muted);
+    font-size:10.5px;font-weight:600;color:var(--muted);white-space:nowrap;
     display:flex;flex-direction:column;align-items:center;gap:3px;
   }
   .tabbar button.active{color:var(--green-dark);}
@@ -164,6 +164,28 @@
   .typerow{display:grid;grid-template-columns:1fr 32px;gap:6px;align-items:center;margin-bottom:8px;}
   .typerow input{padding:10px;font-size:14px;}
   .typerow .del-row{background:none;border:none;color:var(--danger);font-size:20px;font-weight:700;padding:0;}
+
+  /* Geplante Workouts */
+  .plan{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,.05);}
+  .plan .ptitle{font-weight:700;font-size:16px;color:var(--green-dark);}
+  .plan .pmeta{font-size:13px;color:var(--muted);margin-top:4px;}
+  .plan .pexpl{font-size:13px;color:var(--text);margin-top:8px;line-height:1.4;white-space:pre-wrap;}
+  .plan .plast{font-size:13px;margin-top:8px;color:var(--green-dark);font-weight:600;}
+  .plan .pdone{margin-top:12px;}
+  /* Admin: Personen + Planformular */
+  .personrow{display:grid;grid-template-columns:1fr 1.4fr 32px;gap:6px;align-items:center;margin-bottom:8px;}
+  .personrow input{padding:10px;font-size:14px;}
+  .personrow .del-row{background:none;border:none;color:var(--danger);font-size:20px;font-weight:700;padding:0;}
+  .pendrow{display:flex;justify-content:space-between;align-items:center;gap:8px;background:#fff;border:1px solid var(--border);border-radius:10px;padding:8px 10px;margin-top:8px;font-size:13px;}
+  .pendrow .del-row{background:none;border:none;color:var(--danger);font-size:18px;font-weight:700;padding:0 4px;}
+  .planadmin{background:#fff;border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:10px;}
+  .planadmin .pa-meta{font-size:13px;color:var(--muted);margin-top:3px;}
+  .planadmin .pa-expl{font-size:12px;color:var(--muted);margin-top:6px;white-space:pre-wrap;}
+  .planadmin .pa-actions{display:flex;gap:8px;margin-top:10px;}
+  .planadmin .pa-actions button{flex:1;padding:9px 0;font-size:13px;border-radius:9px;border:none;font-weight:600;}
+  .pa-edit{background:var(--green-light);color:var(--green-dark);}
+  .pa-del{background:#f5d9d3;color:var(--danger);}
+  .pa-log{background:var(--green);color:#fff;}
 </style>
 </head>
 <body>
@@ -243,6 +265,14 @@
 </div>
 </div>
 
+<!-- ===== TAB: GEPLANT ===== -->
+<div class="tab" id="tab-plan">
+<div class="wrap">
+  <div class="section-title">Geplante Workouts</div>
+  <div id="plannedList"><div class="empty">Lade…</div></div>
+</div>
+</div>
+
 <!-- ===== TAB: EINSTELLUNGEN ===== -->
 <div class="tab" id="tab-set">
 <div class="wrap">
@@ -267,6 +297,39 @@
     <button class="btn add" id="typeAddRow">+ Gerät hinzufügen</button>
   </div>
   <button class="btn" id="setSave">Alles speichern</button>
+
+  <div class="card" style="margin-top:16px;">
+    <div class="section-title">Für andere planen (Admin)</div>
+    <p style="font-size:13px;color:var(--muted);margin:0 0 12px;line-height:1.4;">
+      Personen mit ihrer App-URL (…/exec). Wird nur lokal auf diesem Gerät gespeichert.
+    </p>
+    <div id="personRows"></div>
+    <button class="btn add" id="personAddRow">+ Person hinzufügen</button>
+    <button class="btn secondary" id="personSave" style="margin-top:10px;">Personen speichern</button>
+
+    <div style="height:1px;background:var(--border);margin:16px 0;"></div>
+
+    <div class="section-title">Workout planen</div>
+    <div class="field"><label>Person</label><select id="pl_person"></select></div>
+    <div id="plStatus" class="status"></div>
+    <div class="field"><label>Datum</label><input type="date" id="pl_date"></div>
+    <div class="field"><label>Übung</label><input type="text" id="pl_exercise" list="exerciseList" placeholder="z. B. Bankdrücken"></div>
+    <div class="field"><label>Gerät</label><select id="pl_equipment"></select></div>
+    <div class="field" id="pl_variantField" style="display:none;"><label>Variante</label><select id="pl_variant"></select></div>
+    <div class="row">
+      <div class="field"><label>Sätze</label><input type="number" id="pl_sets" inputmode="numeric" value="3"></div>
+      <div class="field"><label>Reps</label><input type="number" id="pl_reps" inputmode="numeric" value="10"></div>
+    </div>
+    <div class="field"><label>Erklärung (optional)</label><textarea id="pl_expl" rows="3" placeholder="Ausführung, Hinweise …"></textarea></div>
+    <button class="btn add" id="pl_add">+ zur Liste hinzufügen</button>
+
+    <div id="pl_pending"></div>
+    <button class="btn" id="pl_sendAll" style="margin-top:8px;">Alle senden</button>
+
+    <div style="height:1px;background:var(--border);margin:16px 0;"></div>
+    <div class="section-title">Offene Pläne der Person</div>
+    <div id="pl_open"><div class="empty">Person wählen…</div></div>
+  </div>
 </div>
 </div>
 
@@ -317,6 +380,7 @@
 <!-- Tab-Leiste -->
 <nav class="tabbar">
   <button id="navLog" class="active"><span class="ic">📝</span>Erfassen</button>
+  <button id="navPlan"><span class="ic">📋</span>Geplant</button>
   <button id="navCal"><span class="ic">📅</span>Kalender</button>
   <button id="navAna"><span class="ic">📊</span>Analyse</button>
   <button id="navSet"><span class="ic">⚙️</span>Einstellungen</button>
@@ -330,7 +394,11 @@
    ============================================================ */
 var SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyMEj_2yKWRno6sOVkUkWBap6TR9EyneSTAuai2USMcTTBVJQ0asK2Fp5eu6osgjt1rTQ/exec"; // <-- HIER deine /exec URL eintragen (optional)
 
-// Standard-Geräte (Seed) – im Einstellungen-Tab editierbar, dann im Sheet gespeichert
+// ZENTRALE Admin-Tabelle für Geräte & Varianten. Alle Apps lesen von hier.
+// Nur wessen App auf diese URL zeigt (= du), sieht den Einstellungen-Tab.
+var ADMIN_URL = "https://script.google.com/macros/s/AKfycbxipzVeMld10i0iv7HSCgP2YUr3uLUH5fcBoZT5MdIm_3O66rkWGA0h_bJHLOc-oEFZXA/exec";
+
+// Standard-Geräte (Seed / Fallback)
 var DEFAULT_EQUIPMENT = ["Machine","Resistance Band","Loop Band","Tube","Thera Loop","Body Weight","Kettlebell","TRX","Dumbbell","Barbell"];
 
 /* ---------- State ---------- */
@@ -338,11 +406,16 @@ var STORE_URL = "gymtracker_url";
 var STORE_EX  = "gymtracker_exercises";
 var STORE_TYPES = "gymtracker_types";
 var STORE_SETTINGS = "gymtracker_settings";
+var STORE_PEOPLE = "gymtracker_people"; // Admin: [{name,url}]
 var calYear, calMonth; // calMonth 0-basiert
 var equipmentTypes = DEFAULT_EQUIPMENT.slice(); // editierbare Geräteliste (lokaler Stand)
 var equipSettings = []; // [{equipment,label,weight}] (lokaler Stand)
 
 function getUrl(){ return SCRIPT_URL || localStorage.getItem(STORE_URL) || ""; }
+// Quelle für die zentrale Geräte-/Variantentabelle
+function equipSource(){ return ADMIN_URL || getUrl(); }
+// Admin ist, wessen App auf die zentrale Tabelle zeigt
+function isAdmin(){ return !!ADMIN_URL && getUrl()===ADMIN_URL; }
 function setUrl(u){ localStorage.setItem(STORE_URL,u); }
 
 /* ---------- Status ---------- */
@@ -494,17 +567,17 @@ function saveEquipCache(){
   try{localStorage.setItem(STORE_TYPES,JSON.stringify(equipmentTypes));}catch(e){}
   try{localStorage.setItem(STORE_SETTINGS,JSON.stringify(equipSettings));}catch(e){}
 }
-// Equipment-Einstellungen (Varianten) vom Sheet laden + lokal cachen
+// Varianten aus der ZENTRALEN Tabelle laden + lokal cachen
 function fetchSettings(cb){
-  var url=getUrl();if(!url){if(cb)cb();return;}
+  var url=equipSource();if(!url){if(cb)cb();return;}
   fetch(url+'?action=settings')
     .then(function(r){return r.json();})
     .then(function(d){equipSettings=(d&&d.settings)||[];saveEquipCache();if(cb)cb();})
     .catch(function(){if(cb)cb();});
 }
-// Geräteliste vom Sheet laden + lokal cachen (Fallback: Standardliste)
+// Geräteliste aus der ZENTRALEN Tabelle laden + lokal cachen (Fallback: Standardliste)
 function fetchTypes(cb){
-  var url=getUrl();if(!url){if(cb)cb();return;}
+  var url=equipSource();if(!url){if(cb)cb();return;}
   fetch(url+'?action=types')
     .then(function(r){return r.json();})
     .then(function(d){
@@ -537,6 +610,9 @@ function save(){
       comment:s.querySelector('.s-comment').value
     });
   }
+  // Falls dieser Speichervorgang einen geplanten Workout abschließt
+  var planToClose=(activePlan && activePlan.exercise===exercise)?activePlan:null;
+  activePlan=null;
   // Satznummer aus den bereits angezeigten Einträgen fortführen (kein Vorab-Call)
   var max=0;
   currentEntries.forEach(function(o){
@@ -566,6 +642,12 @@ function save(){
     var ids=(d&&d.ids)||[];
     optimistic.forEach(function(o,i){o._pending=false;if(ids[i])o.id=ids[i];});
     renderEntries();
+    // geplanten Workout als erledigt entfernen
+    if(planToClose){
+      postJSON(url,{action:'deletePlan',row:{id:planToClose.id}})
+        .then(function(){plannedItems=plannedItems.filter(function(p){return p.id!==planToClose.id;});})
+        .catch(function(){});
+    }
   }).catch(function(e){
     // Rückgängig machen
     currentEntries=currentEntries.filter(function(o){return optimistic.indexOf(o)===-1;});
@@ -726,16 +808,110 @@ function openDate(ds){
 /* ---------- Tabs ---------- */
 function switchTab(which){
   document.getElementById('tab-log').classList.toggle('active',which==='log');
+  document.getElementById('tab-plan').classList.toggle('active',which==='plan');
   document.getElementById('tab-cal').classList.toggle('active',which==='cal');
   document.getElementById('tab-ana').classList.toggle('active',which==='ana');
   document.getElementById('tab-set').classList.toggle('active',which==='set');
   document.getElementById('navLog').classList.toggle('active',which==='log');
+  document.getElementById('navPlan').classList.toggle('active',which==='plan');
   document.getElementById('navCal').classList.toggle('active',which==='cal');
   document.getElementById('navAna').classList.toggle('active',which==='ana');
   document.getElementById('navSet').classList.toggle('active',which==='set');
+  if(which==='plan')loadPlanned();
   if(which==='cal')loadCalendar();
   if(which==='ana')loadAnalysis();
   if(which==='set')loadSettingsTab();
+}
+
+/* ---------- Geplante Workouts (Athlet) ---------- */
+var plannedItems=[]; // aktuell geladene Pläne
+var activePlan=null; // {id,exercise} – gerade abzuarbeitender Plan
+// zuletzt genutztes Gewicht je "übung||gerät" aus dem Verlauf
+function buildLastWeightMap(rows){
+  var map={};
+  rows.forEach(function(r){
+    var key=((r.exercise||'')+'||'+(r.equipment||'')).toLowerCase();
+    var prev=map[key];
+    // jüngstes Datum gewinnt
+    if(!prev || String(r.date)>prev.date){map[key]={date:String(r.date),weight:r.weight,unit:r.unit};}
+  });
+  return map;
+}
+function lastWeightFor(map,exercise,equipment){
+  return map[((exercise||'')+'||'+(equipment||'')).toLowerCase()]||null;
+}
+function loadPlanned(){
+  var url=getUrl();var box=document.getElementById('plannedList');
+  if(!url){box.innerHTML='<div class="empty">Bitte zuerst die Apps-Script-URL einrichten.</div>';return;}
+  box.innerHTML='<div class="empty">Lade…</div>';
+  var plans=null,hist=null;
+  function ready(){
+    if(plans===null||hist===null)return;
+    plannedItems=plans;
+    renderPlanned(buildLastWeightMap(hist));
+  }
+  fetch(url+'?action=plans').then(function(r){return r.json();})
+    .then(function(d){plans=(d&&d.plans)||[];ready();})
+    .catch(function(e){box.innerHTML='<div class="empty">Fehler beim Laden: '+e.message+'</div>';});
+  fetch(url+'?action=read').then(function(r){return r.json();})
+    .then(function(d){hist=(d&&d.rows)||[];ready();})
+    .catch(function(){hist=[];ready();});
+}
+function fmtDateLabel(ds){
+  if(!ds)return 'Ohne Datum';
+  var p=ds.split('-');if(p.length!==3)return ds;
+  return p[2]+'.'+p[1]+'.'+p[0];
+}
+function renderPlanned(lwMap){
+  var box=document.getElementById('plannedList');
+  if(!plannedItems.length){box.innerHTML='<div class="empty">Keine geplanten Workouts.</div>';return;}
+  box.innerHTML='';
+  // nach Datum gruppieren
+  var groups={};var order=[];
+  plannedItems.forEach(function(p){
+    var key=p.date||'';
+    if(!groups[key]){groups[key]=[];order.push(key);}
+    groups[key].push(p);
+  });
+  // Datumsschlüssel sortieren (leere/ohne Datum ans Ende)
+  order.sort(function(a,b){if(!a)return 1;if(!b)return -1;return a<b?-1:1;});
+  order.forEach(function(key){
+    var h=document.createElement('div');h.className='section-title';h.style.marginTop='4px';
+    h.textContent=fmtDateLabel(key);
+    box.appendChild(h);
+    groups[key].forEach(function(p){
+      var d=document.createElement('div');d.className='plan';
+      var lw=lastWeightFor(lwMap,p.exercise,p.equipment);
+      var lwTxt=lw?('Zuletzt: '+escapeHtml(lw.weight)+' '+escapeHtml(lw.unit||'')):'Noch kein Verlauf';
+      var equip=p.equipment?(' · '+escapeHtml(p.equipment)):'';
+      var vv=p.variant?(' · '+escapeHtml(p.variant)):'';
+      var expl=p.explanation?('<div class="pexpl">'+escapeHtml(p.explanation)+'</div>'):'';
+      d.innerHTML=
+        '<div class="ptitle">'+escapeHtml(p.exercise)+'</div>'+
+        '<div class="pmeta">'+escapeHtml(p.sets)+' Sätze × '+escapeHtml(p.reps)+' Reps'+equip+vv+'</div>'+
+        expl+
+        '<div class="plast">'+lwTxt+'</div>'+
+        '<button class="btn pdone">Erledigt – erfassen ›</button>';
+      d.querySelector('.pdone').onclick=function(){startPlanned(p,lw);};
+      box.appendChild(d);
+    });
+  });
+}
+// Plan abarbeiten: Erfassen-Formular vorausfüllen
+function startPlanned(p,lw){
+  activePlan={id:p.id,exercise:p.exercise};
+  document.getElementById('date').value=todayStr();
+  document.getElementById('exercise').value=p.exercise;
+  var sets=document.getElementById('sets');sets.innerHTML='';
+  var n=parseInt(p.sets,10);if(isNaN(n)||n<1)n=1;
+  var w=lw?lw.weight:'';
+  var unit=(lw&&lw.unit==='lbs')?'lbs':'kg';
+  for(var i=0;i<n;i++){
+    var el=setTemplate(i+1,p.reps,w,unit,p.equipment||'',p.variant||'',p.variant||'');
+    sets.appendChild(el);
+  }
+  switchTab('log');
+  loadEntries();
 }
 
 /* ---------- Einstellungen-Tab ---------- */
@@ -797,6 +973,295 @@ function renderSettingsTab(){
   }else{
     box.appendChild(settRowTemplate(list[0]||'','',''));
   }
+  // Admin-Bereich
+  renderPeople();
+  document.getElementById('pl_date').value=todayStr();
+  document.getElementById('pl_equipment').innerHTML='<option value="">– Gerät –</option>';
+  renderPending();
+  loadAdminExplanations();
+  onAdminPersonChange(); // Daten der aktuell gewählten Person laden
+}
+
+/* ---------- Admin: Personen & Planung ---------- */
+function readPeople(){var a=[];try{a=JSON.parse(localStorage.getItem(STORE_PEOPLE)||"[]");}catch(e){}return a;}
+function writePeople(a){try{localStorage.setItem(STORE_PEOPLE,JSON.stringify(a));}catch(e){}}
+function personRowTemplate(name,url){
+  var d=document.createElement('div');d.className='personrow';
+  d.innerHTML=
+    '<input type="text" class="p-name" placeholder="Name" value="'+(name||'').replace(/"/g,'&quot;')+'">'+
+    '<input type="url" class="p-url" placeholder="…/exec URL" value="'+(url||'').replace(/"/g,'&quot;')+'">'+
+    '<button class="del-row" type="button" title="Entfernen">×</button>';
+  d.querySelector('.del-row').onclick=function(){d.remove();};
+  return d;
+}
+function renderPeople(){
+  var box=document.getElementById('personRows');box.innerHTML='';
+  var people=readPeople();
+  if(!people.length){box.appendChild(personRowTemplate('',''));}
+  else{people.forEach(function(p){box.appendChild(personRowTemplate(p.name,p.url));});}
+  fillPersonSelect(people);
+}
+function collectPeople(){
+  var out=[];var els=document.getElementById('personRows').children;
+  for(var i=0;i<els.length;i++){
+    var n=els[i].querySelector('.p-name').value.trim();
+    var u=els[i].querySelector('.p-url').value.trim();
+    if(n&&u)out.push({name:n,url:u});
+  }
+  return out;
+}
+function savePeople(){
+  var people=collectPeople();writePeople(people);fillPersonSelect(people);
+  var st=document.getElementById('setStatus');
+  st.textContent='Personen gespeichert ✓';st.className='status show ok';
+  setTimeout(function(){st.className='status';},2500);
+}
+function fillPersonSelect(people){
+  var sel=document.getElementById('pl_person');
+  sel.innerHTML=people.map(function(p){return '<option value="'+escapeHtml(p.url)+'">'+escapeHtml(p.name)+'</option>';}).join('');
+}
+/* ---------- Admin: Daten der gewählten Person ---------- */
+var adminTypes=[], adminSettings=[], adminHistory=[], adminPlans=[];
+var adminExplanations={}; // {exercise: text} aus deinem eigenen Sheet
+var pendingPlans=[];       // gesammelte, noch nicht gesendete Pläne
+var adminEditId=null;      // id eines gerade bearbeiteten Plans
+
+function planStatus(msg,type){
+  var st=document.getElementById('plStatus');
+  st.textContent=msg;st.className='status show '+(type||'load');
+  if(type==='ok')setTimeout(function(){st.className='status';},2500);
+}
+function loadAdminExplanations(){
+  var url=getUrl();if(!url)return;
+  fetch(url+'?action=explanations').then(function(r){return r.json();})
+    .then(function(d){adminExplanations=(d&&d.explanations)||{};}).catch(function(){});
+}
+function adminVariantsFor(eq){
+  return adminSettings.filter(function(e){return e.equipment===eq;})
+    .map(function(e){return e.label;}).filter(function(l){return l;});
+}
+function planEquipmentOptions(selected){
+  var list=[''].concat(adminTypes.length?adminTypes:DEFAULT_EQUIPMENT);
+  if(selected&&list.indexOf(selected)===-1)list.push(selected);
+  return list.map(function(v){
+    var lab=v===''?'– Gerät –':escapeHtml(v);
+    return '<option value="'+escapeHtml(v)+'"'+(v===selected?' selected':'')+'>'+lab+'</option>';
+  }).join('');
+}
+function planRefreshVariant(preselect){
+  var eq=document.getElementById('pl_equipment').value;
+  var field=document.getElementById('pl_variantField');
+  var sel=document.getElementById('pl_variant');
+  var vs=adminVariantsFor(eq);
+  if(vs.length>0){
+    // ohne explizite Vorgabe: zuletzt von der Person genutzte Variante vorwählen
+    var pre=(preselect!=null)?preselect:adminLastVariant(document.getElementById('pl_exercise').value.trim(),eq);
+    sel.innerHTML='<option value="">– Variante –</option>'+vs.map(function(l){
+      return '<option value="'+escapeHtml(l)+'"'+(l===pre?' selected':'')+'>'+escapeHtml(l)+'</option>';}).join('');
+    field.style.display='';
+  }else{sel.innerHTML='';field.style.display='none';}
+}
+// zuletzt von der Person genutzte Variante (aus Verlauf) für Übung+Gerät, sonst nur Gerät
+function adminLastVariant(exercise,equipment){
+  var vs=adminVariantsFor(equipment);if(!vs.length)return '';
+  function scan(matchEx){
+    var best=null;
+    adminHistory.forEach(function(r){
+      if((r.equipment||'')!==equipment)return;
+      if(matchEx && (r.exercise||'').toLowerCase()!==(exercise||'').toLowerCase())return;
+      if(vs.indexOf(r.comment)===-1)return;
+      if(!best||String(r.date)>best.date)best={date:String(r.date),variant:r.comment};
+    });
+    return best?best.variant:'';
+  }
+  return scan(true)||scan(false);
+}
+function onAdminPersonChange(){
+  var url=document.getElementById('pl_person').value;
+  // Geräte & Varianten kommen zentral (nicht von der Person)
+  adminTypes=equipmentTypes.slice();
+  adminSettings=equipSettings.slice();
+  document.getElementById('pl_open').innerHTML='<div class="empty">'+(url?'Lade…':'Person wählen…')+'</div>';
+  document.getElementById('pl_equipment').innerHTML=planEquipmentOptions('');
+  planRefreshVariant();
+  if(!url)return;
+  // Nur Verlauf (für letzte Variante/Gewicht) und offene Pläne der Person laden
+  fetch(url+'?action=read').then(function(r){return r.json();}).then(function(d){
+    adminHistory=(d&&d.rows)||[];planRefreshVariant();
+  }).catch(function(){});
+  loadAdminPlans();
+}
+function loadAdminPlans(){
+  var url=document.getElementById('pl_person').value;if(!url)return;
+  fetch(url+'?action=plans').then(function(r){return r.json();}).then(function(d){
+    adminPlans=(d&&d.plans)||[];renderOpenPlans();
+  }).catch(function(e){document.getElementById('pl_open').innerHTML='<div class="empty">Fehler: '+e.message+'</div>';});
+}
+function autofillExplanation(){
+  var ex=document.getElementById('pl_exercise').value.trim();
+  var t=document.getElementById('pl_expl');
+  if(ex&&adminExplanations[ex]!=null&&t.value.trim()===''){t.value=adminExplanations[ex];}
+}
+// aktuelle Formulareingaben als Plan-Objekt
+function readPlanForm(){
+  return {
+    date:document.getElementById('pl_date').value,
+    exercise:document.getElementById('pl_exercise').value.trim(),
+    equipment:document.getElementById('pl_equipment').value,
+    variant:document.getElementById('pl_variant')?document.getElementById('pl_variant').value:'',
+    sets:document.getElementById('pl_sets').value,
+    reps:document.getElementById('pl_reps').value,
+    explanation:document.getElementById('pl_expl').value
+  };
+}
+function resetPlanForm(){
+  document.getElementById('pl_exercise').value='';
+  document.getElementById('pl_expl').value='';
+  document.getElementById('pl_sets').value='3';
+  document.getElementById('pl_reps').value='10';
+  document.getElementById('pl_equipment').innerHTML=planEquipmentOptions('');
+  planRefreshVariant();
+}
+function addPending(){
+  if(!document.getElementById('pl_person').value){planStatus('Bitte zuerst eine Person wählen.','err');return;}
+  var p=readPlanForm();
+  if(!p.exercise){planStatus('Bitte eine Übung eingeben.','err');return;}
+  pendingPlans.push(p);
+  renderPending();
+  resetPlanForm();
+  planStatus('Zur Liste hinzugefügt.','ok');
+}
+function renderPending(){
+  var box=document.getElementById('pl_pending');box.innerHTML='';
+  pendingPlans.forEach(function(p,idx){
+    var d=document.createElement('div');d.className='pendrow';
+    var v=p.variant?(' · '+escapeHtml(p.variant)):'';
+    d.innerHTML='<span>'+escapeHtml(p.exercise)+' · '+escapeHtml(p.sets)+'×'+escapeHtml(p.reps)+(p.equipment?(' · '+escapeHtml(p.equipment)):'')+v+'</span>'+
+      '<button class="del-row" type="button">×</button>';
+    d.querySelector('.del-row').onclick=function(){pendingPlans.splice(idx,1);renderPending();};
+    box.appendChild(d);
+  });
+}
+function sendAllPlans(){
+  var url=document.getElementById('pl_person').value;
+  if(!url){planStatus('Bitte zuerst eine Person wählen.','err');return;}
+  // ggf. noch nicht hinzugefügte, aber ausgefüllte Übung mitnehmen
+  var cur=readPlanForm();
+  var rows=pendingPlans.slice();
+  if(cur.exercise)rows.push(cur);
+  if(!rows.length){planStatus('Keine Übungen zum Senden.','err');return;}
+  planStatus('Sende…','load');
+  postJSON(url,{action:'savePlans',rows:rows}).then(function(){
+    // geänderte/neue Erklärungen zentral speichern
+    var myUrl=getUrl();var seen={};
+    rows.forEach(function(p){
+      var ex=p.exercise;if(!ex||seen[ex])return;seen[ex]=true;
+      if((p.explanation||'')!==(adminExplanations[ex]||'')){
+        adminExplanations[ex]=p.explanation||'';
+        if(myUrl)postJSON(myUrl,{action:'saveExplanation',row:{exercise:ex,explanation:p.explanation||''}}).catch(function(){});
+      }
+    });
+    pendingPlans=[];renderPending();resetPlanForm();
+    planStatus('Alle Pläne gesendet ✓','ok');
+    loadAdminPlans();
+  }).catch(function(e){planStatus('Fehler: '+e.message,'err');});
+}
+
+/* ---------- Admin: offene Pläne verwalten ---------- */
+function renderOpenPlans(){
+  var box=document.getElementById('pl_open');
+  if(!adminPlans.length){box.innerHTML='<div class="empty">Keine offenen Pläne.</div>';return;}
+  box.innerHTML='';
+  adminPlans.forEach(function(p){
+    var d=document.createElement('div');d.className='planadmin';d.dataset.id=p.id;
+    var v=p.variant?(' · '+escapeHtml(p.variant)):'';
+    var expl=p.explanation?('<div class="pa-expl">'+escapeHtml(p.explanation)+'</div>'):'';
+    d.innerHTML=
+      '<div><b>'+escapeHtml(p.exercise)+'</b></div>'+
+      '<div class="pa-meta">'+(p.date?escapeHtml(p.date)+' · ':'')+escapeHtml(p.sets)+'×'+escapeHtml(p.reps)+(p.equipment?(' · '+escapeHtml(p.equipment)):'')+v+'</div>'+
+      expl+
+      '<div class="pa-actions"><button class="pa-edit">Bearbeiten</button><button class="pa-log">Eintragen</button><button class="pa-del">Löschen</button></div>';
+    d.querySelector('.pa-edit').onclick=function(){editPlanInline(d,p);};
+    d.querySelector('.pa-del').onclick=function(){deletePlanAdmin(p);};
+    d.querySelector('.pa-log').onclick=function(){logPlanDirect(p);};
+    box.appendChild(d);
+  });
+}
+function editPlanInline(card,p){
+  card.innerHTML=
+    '<div class="field" style="margin-bottom:8px;"><label>Datum</label><input type="date" class="e-date" value="'+(p.date||'')+'"></div>'+
+    '<div class="field" style="margin-bottom:8px;"><label>Übung</label><input type="text" class="e-exercise" value="'+(p.exercise||'').replace(/"/g,'&quot;')+'"></div>'+
+    '<div class="field" style="margin-bottom:8px;"><label>Gerät</label><select class="e-equipment">'+planEquipmentOptions(p.equipment||'')+'</select></div>'+
+    '<div class="field e-variant-field" style="margin-bottom:8px;display:none;"><label>Variante</label><select class="e-variant"></select></div>'+
+    '<div class="row"><div class="field" style="margin-bottom:8px;"><label>Sätze</label><input type="number" class="e-sets" value="'+(p.sets||'')+'"></div>'+
+    '<div class="field" style="margin-bottom:8px;"><label>Reps</label><input type="number" class="e-reps" value="'+(p.reps||'')+'"></div></div>'+
+    '<div class="field" style="margin-bottom:8px;"><label>Erklärung</label><textarea class="e-expl" rows="2">'+escapeHtml(p.explanation||'')+'</textarea></div>'+
+    '<div class="pa-actions"><button class="pa-log e-save">Speichern</button><button class="pa-del e-cancel">Abbrechen</button></div>';
+  function refVar(pre){
+    var eq=card.querySelector('.e-equipment').value;var f=card.querySelector('.e-variant-field');var s=card.querySelector('.e-variant');
+    var vs=adminVariantsFor(eq);
+    if(vs.length>0){s.innerHTML='<option value="">– Variante –</option>'+vs.map(function(l){return '<option value="'+escapeHtml(l)+'"'+(l===pre?' selected':'')+'>'+escapeHtml(l)+'</option>';}).join('');f.style.display='';}
+    else{s.innerHTML='';f.style.display='none';}
+  }
+  card.querySelector('.e-equipment').onchange=function(){refVar('');};
+  refVar(p.variant||'');
+  card.querySelector('.e-cancel').onclick=function(){renderOpenPlans();};
+  card.querySelector('.e-save').onclick=function(){
+    var url=document.getElementById('pl_person').value;
+    var row={id:p.id,
+      date:card.querySelector('.e-date').value,
+      exercise:card.querySelector('.e-exercise').value.trim(),
+      equipment:card.querySelector('.e-equipment').value,
+      variant:card.querySelector('.e-variant')?card.querySelector('.e-variant').value:'',
+      sets:card.querySelector('.e-sets').value,
+      reps:card.querySelector('.e-reps').value,
+      explanation:card.querySelector('.e-expl').value};
+    planStatus('Speichere…','load');
+    postJSON(url,{action:'updatePlan',row:row}).then(function(){
+      // Erklärung ggf. zentral aktualisieren
+      var myUrl=getUrl();
+      if(myUrl&&(row.explanation||'')!==(adminExplanations[row.exercise]||'')){
+        adminExplanations[row.exercise]=row.explanation||'';
+        postJSON(myUrl,{action:'saveExplanation',row:{exercise:row.exercise,explanation:row.explanation||''}}).catch(function(){});
+      }
+      planStatus('Aktualisiert ✓','ok');loadAdminPlans();
+    }).catch(function(e){planStatus('Fehler: '+e.message,'err');});
+  };
+}
+function deletePlanAdmin(p){
+  if(!confirm('Diesen Plan löschen?'))return;
+  var url=document.getElementById('pl_person').value;
+  planStatus('Lösche…','load');
+  postJSON(url,{action:'deletePlan',row:{id:p.id}}).then(function(){
+    adminPlans=adminPlans.filter(function(x){return x.id!==p.id;});renderOpenPlans();planStatus('Gelöscht ✓','ok');
+  }).catch(function(e){planStatus('Fehler: '+e.message,'err');});
+}
+function adminLastWeight(exercise,equipment){
+  var key=((exercise||'')+'||'+(equipment||'')).toLowerCase();var best=null;
+  adminHistory.forEach(function(r){
+    if(((r.exercise||'')+'||'+(r.equipment||'')).toLowerCase()!==key)return;
+    if(!best||String(r.date)>best.date)best={date:String(r.date),weight:r.weight,unit:r.unit};
+  });
+  return best;
+}
+function logPlanDirect(p){
+  var url=document.getElementById('pl_person').value;
+  var lw=adminLastWeight(p.exercise,p.equipment);
+  var n=parseInt(p.sets,10);if(isNaN(n)||n<1)n=1;
+  var w=lw?lw.weight:'';var unit=(lw&&lw.unit==='lbs')?'lbs':'kg';
+  if(!confirm('„'+p.exercise+'" mit '+(w!==''?(w+' '+unit):'ohne Gewicht')+' in die Historie eintragen?'))return;
+  var rows=[];
+  for(var i=0;i<n;i++){
+    rows.push({date:todayStr(),exercise:p.exercise,setNo:i+1,reps:p.reps,weight:w,unit:unit,
+      equipment:p.equipment||'',comment:p.variant||''});
+  }
+  planStatus('Trage ein…','load');
+  postJSON(url,{action:'create',rows:rows}).then(function(){
+    return postJSON(url,{action:'deletePlan',row:{id:p.id}});
+  }).then(function(){
+    adminPlans=adminPlans.filter(function(x){return x.id!==p.id;});renderOpenPlans();
+    planStatus('Eingetragen ✓','ok');
+  }).catch(function(e){planStatus('Fehler: '+e.message,'err');});
 }
 function saveSettingsTab(){
   var url=getUrl();if(!url){openCfg();return;}
@@ -940,11 +1405,12 @@ document.addEventListener('DOMContentLoaded',function(){
   document.getElementById('modalBg').onclick=function(e){if(e.target.id==='modalBg')closeEdit();};
   document.getElementById('cfgSave').onclick=function(){
     var u=document.getElementById('cfgUrl').value.trim();
-    if(u){setUrl(u);closeCfg();loadEntries();fetchExercises();status('URL gespeichert ✓','ok');}
+    if(u){setUrl(u);closeCfg();applyAdminVisibility();loadEntries();fetchExercises();fetchTypes(refreshAllSets);fetchSettings(refreshAllSets);status('URL gespeichert ✓','ok');}
   };
   document.getElementById('cfgBg').onclick=function(e){if(e.target.id==='cfgBg')closeCfg();};
   document.querySelector('header').addEventListener('dblclick',openCfg);
   document.getElementById('navLog').onclick=function(){switchTab('log');};
+  document.getElementById('navPlan').onclick=function(){switchTab('plan');};
   document.getElementById('navCal').onclick=function(){switchTab('cal');};
   document.getElementById('navAna').onclick=function(){switchTab('ana');};
   document.getElementById('navSet').onclick=function(){switchTab('set');};
@@ -957,9 +1423,26 @@ document.addEventListener('DOMContentLoaded',function(){
     document.getElementById('typeRows').appendChild(typeRowTemplate(''));
   };
   document.getElementById('setSave').onclick=saveSettingsTab;
+  document.getElementById('personAddRow').onclick=function(){
+    document.getElementById('personRows').appendChild(personRowTemplate('',''));
+  };
+  document.getElementById('personSave').onclick=savePeople;
+  document.getElementById('pl_person').onchange=onAdminPersonChange;
+  document.getElementById('pl_equipment').onchange=function(){planRefreshVariant();};
+  document.getElementById('pl_exercise').onchange=function(){autofillExplanation();planRefreshVariant();};
+  document.getElementById('pl_exercise').onblur=function(){autofillExplanation();planRefreshVariant();};
+  document.getElementById('pl_add').onclick=addPending;
+  document.getElementById('pl_sendAll').onclick=sendAllPlans;
+  applyAdminVisibility(); // Einstellungen-Tab nur für Admin
   refreshAllSets(); // Varianten-Felder mit dem lokalen Cache befüllen
-  if(!getUrl()){openCfg();}else{loadEntries();fetchExercises();}
+  if(!getUrl()){openCfg();}else{loadEntries();fetchExercises();fetchTypes(refreshAllSets);fetchSettings(refreshAllSets);}
 });
+// Einstellungen-Tab (inkl. Admin-Bereich) nur anzeigen, wenn diese App auf die zentrale Tabelle zeigt
+function applyAdminVisibility(){
+  var show=isAdmin();
+  document.getElementById('navSet').style.display=show?'':'none';
+  if(!show){switchTab('log');}
+}
 
 /* ============================================================
    PWA: Manifest (inline) + Service Worker (inline via Blob)
@@ -968,7 +1451,7 @@ document.addEventListener('DOMContentLoaded',function(){
   var icon="data:image/svg+xml,"+encodeURIComponent(
     '<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512"><rect width="512" height="512" rx="96" fill="#3f6b4f"/><g fill="#e9ecea"><rect x="86" y="226" width="40" height="60" rx="8"/><rect x="386" y="226" width="40" height="60" rx="8"/><rect x="126" y="196" width="44" height="120" rx="10"/><rect x="342" y="196" width="44" height="120" rx="10"/><rect x="170" y="240" width="172" height="32" rx="10"/></g></svg>');
   var manifest={
-    name:"Gym Tracker",short_name:"Gym",start_url:".",scope:".",
+    name:"Carolin",short_name:"Carolin",start_url:".",scope:".",
     display:"standalone",background_color:"#e9ecea",theme_color:"#3f6b4f",
     icons:[{src:icon,sizes:"512x512",type:"image/svg+xml",purpose:"any maskable"}]
   };
